@@ -87,3 +87,59 @@ sym_expr join(sym_expr const & a, sym_expr const & b)
     else
         return sym_expr::top;
 }
+
+sym_range &sym_range::operator|=(sym_range const & rhs)
+{
+    lo = meet(lo, rhs.lo);
+    hi = join(hi, rhs.hi);
+    return *this;
+}
+
+sym_range &sym_range::operator&=(sym_range const & rhs)
+{
+    lo = join(lo, rhs.lo);
+    hi = meet(hi, rhs.hi);
+    return *this;
+}
+
+sym_range &sym_range::operator+=(sym_range const & rhs)
+{
+    lo += rhs.lo;
+    hi += rhs.hi;
+    return *this;
+}
+
+sym_range &sym_range::operator-=(sym_range const & rhs)
+{
+    lo -= rhs.hi;
+    hi -= rhs.lo;
+    return *this;
+}
+
+sym_range operator|(sym_range const & a, sym_range const & b)
+{
+    sym_range res = a;
+    res |= b;
+    return res;
+}
+
+sym_range operator&(sym_range const & a, sym_range const & b)
+{
+    sym_range res = a;
+    res &= b;
+    return res;
+}
+
+sym_range operator+(sym_range const & a, sym_range const & b)
+{
+    sym_range res = a;
+    res += b;
+    return res;
+}
+
+sym_range operator-(sym_range const & a, sym_range const & b)
+{
+    sym_range res = a;
+    res -= b;
+    return res;
+}
