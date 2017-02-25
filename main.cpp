@@ -3,29 +3,10 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IRReader/IRReader.h>
-#include <llvm/IR/Module.h>
-#include <llvm/Support/SourceMgr.h>
-#include <llvm/ADT/StringRef.h>
-#include <llvm/Support/raw_ostream.h>
+#include "analyzer.h"
 
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
-
-void f(fs::path const & p)
-{
-    llvm::LLVMContext context;
-    llvm::SMDiagnostic error;
-    auto m = llvm::parseIRFile(p.string(), error, context);
-    if (!m)
-    {
-        std::cerr << "Failed to parse module" << std::endl;
-        error.print(p.string().c_str(), llvm::errs());
-    }
-
-    m->dump();
-}
 
 int main(int argc, char *argv[])
 {
@@ -72,7 +53,7 @@ int main(int argc, char *argv[])
     }
 
     fs::path input_path(vm["input"].as<std::string>());
-    f(input_path);
+    analyze_file(input_path);
 
     return 0;
 }
