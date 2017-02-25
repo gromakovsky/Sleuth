@@ -43,6 +43,8 @@ struct sym_range
 
     sym_range & operator+=(sym_range const &);
     sym_range & operator-=(sym_range const &);
+
+    static sym_range full;
 };
 
 // union
