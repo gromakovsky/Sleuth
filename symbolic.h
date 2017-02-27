@@ -1,14 +1,14 @@
 #pragma once
 
-#include <cstdint>
-
 #include <boost/logic/tribool.hpp>
+
+#include <llvm/ADT/APInt.h>
 
 using boost::logic::tribool;
 
 struct sym_expr
 {
-    sym_expr(std::int64_t);
+    sym_expr(llvm::APInt);
 
     sym_expr & operator+=(sym_expr const &);
     sym_expr & operator-=(sym_expr const &);
@@ -23,7 +23,7 @@ struct sym_expr
 
 private:
     sym_expr(bool);
-    std::int64_t val_;
+    llvm::APInt val_;
     tribool is_special_;
 };
 

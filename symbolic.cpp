@@ -2,7 +2,7 @@
 
 namespace bl = boost::logic;
 
-sym_expr::sym_expr(std::int64_t val)
+sym_expr::sym_expr(llvm::APInt val)
     : val_(val)
     , is_special_(boost::logic::indeterminate)
 {
@@ -32,7 +32,7 @@ bool sym_expr::operator<=(sym_expr const & rhs) const
     if (is_top() || rhs.is_bot())
         return false;
 
-    return val_ <= rhs.val_;
+    return val_.ule(rhs.val_);
 }
 
 bool sym_expr::is_top() const
@@ -46,7 +46,7 @@ bool sym_expr::is_bot() const
 }
 
 sym_expr::sym_expr(bool is_special)
-    : val_(0)
+    : val_(llvm::APInt())
     , is_special_(is_special)
 {
 }
