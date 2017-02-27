@@ -17,6 +17,7 @@ private:
     void analyze_basic_block(llvm::BasicBlock const &);
     void process_instruction(llvm::Instruction const &);
     sym_range compute_def_range(var_id const &);
+    sym_range compute_use_range(var_id const &, void * = nullptr);
 
 private:
     context_t ctx_;

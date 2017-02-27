@@ -17,6 +17,11 @@ namespace fs = boost::filesystem;
  * ------------------------------------------------
  */
 
+sym_range analyzer_t::compute_use_range(var_id const & v, void *)
+{
+    return compute_def_range(v);
+}
+
 sym_range analyzer_t::compute_def_range(var_id const & v)
 {
     auto it = ctx_.def_ranges.find(v);
