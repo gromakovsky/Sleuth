@@ -10,61 +10,29 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/IR/Instructions.h>
 
-#include "context.h"
-#include "symbolic.h"
-
 namespace fs = boost::filesystem;
 
-sym_range compute_def_range(var_id const & v, context_t & ctx)
+/* ------------------------------------------------
+ * Core logic
+ * ------------------------------------------------
+ */
+
+sym_range analyzer_t::compute_def_range(var_id const & v)
 {
-    auto it = ctx.def_ranges.find(v);
-    if (it != ctx.def_ranges.end())
+    auto it = ctx_.def_ranges.find(v);
+    if (it != ctx_.def_ranges.end())
         return it->second;
 
-    ctx.def_ranges.insert({v, sym_range::full});
+    ctx_.def_ranges.insert({v, sym_range::full});
     return sym_range::full;
 }
 
-void process_alloca(llvm::AllocaInst const & alloca, context_t & ctx)
-{
-    std::cout << "ы" << std::endl;
-}
+/* ------------------------------------------------
+ * LLVM wrappers
+ * ------------------------------------------------
+ */
 
-void process_instruction(llvm::Instruction const & instr, context_t & ctx)
-{
-    if (auto alloca = dynamic_cast<llvm::AllocaInst const *>(&instr))
-        process_alloca(*alloca, ctx);
-}
-
-void analyze_basic_block(llvm::BasicBlock const & bb, context_t & ctx)
-{
-    std::cout << "Analyzing basic block " << bb.getName().str() << std::endl;
-
-    for (auto const & i : bb)
-        process_instruction(i, ctx);
-}
-
-void analyze_function(llvm::Function const & f, context_t & ctx)
-{
-    std::cout << "Analyzing function " << f.getName().str() << std::endl;
-
-    for (auto const & bb : f)
-        analyze_basic_block(bb, ctx);
-}
-
-void analyze_module(llvm::Module const & module, context_t & ctx)
-{
-    std::cout << "Analyzing module "
-              << module.getModuleIdentifier()
-              << " corresponding to "
-              << module.getSourceFileName()
-              << std::endl;
-
-    for (auto const & f : module)
-        analyze_function(f, ctx);
-}
-
-void analyze_file(fs::path const & p)
+void analyzer_t::analyze_file(fs::path const & p)
 {
     llvm::LLVMContext context;
     llvm::SMDiagnostic error;
@@ -76,5 +44,37 @@ void analyze_file(fs::path const & p)
     }
 
     context_t analyzer_ctx;
-    analyze_module(*m, analyzer_ctx);
+    analyze_module(*m);
+}
+
+void analyzer_t::analyze_module(llvm::Module const & module)
+{
+    std::cout << "Analyzing module "
+              << module.getModuleIdentifier()
+              << " corresponding to "
+              << module.getSourceFileName()
+              << std::endl;
+
+    for (auto const & f : module)
+        analyze_function(f);
+}
+
+void analyzer_t::analyze_function(llvm::Function const & f)
+{
+    std::cout << "Analyzing function " << f.getName().str() << std::endl;
+
+    for (auto const & bb : f)
+        analyze_basic_block(bb);
+}
+
+void analyzer_t::analyze_basic_block(llvm::BasicBlock const & bb)
+{
+    std::cout << "Analyzing basic block " << bb.getName().str() << std::endl;
+
+    for (auto const & i : bb)
+        process_instruction(i);
+}
+
+void analyzer_t::process_instruction(llvm::Instruction const & instr)
+{
 }
