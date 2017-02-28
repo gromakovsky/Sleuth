@@ -2,4 +2,4 @@
 
 #include <llvm/IR/Value.h>
 
-using var_id = llvm::Value *;
+using var_id = llvm::Value const *;

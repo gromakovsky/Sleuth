@@ -10,6 +10,6 @@ using new_val_set_t = std::unordered_set<var_id>;
 
 struct context_t
 {
-    std::unordered_map<var_id, sym_range> def_ranges;
+    std::unordered_map<var_id, sym_range> val_ranges;
     new_val_set_t new_val_set;
 };

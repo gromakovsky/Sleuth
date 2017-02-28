@@ -21,6 +21,8 @@ struct sym_expr
     bool is_top() const;
     bool is_bot() const;
 
+    llvm::APInt const & val() const;
+
 private:
     sym_expr(bool);
     llvm::APInt val_;
@@ -32,6 +34,8 @@ sym_expr operator-(sym_expr const & a, sym_expr const & b);
 
 sym_expr meet(sym_expr const & a, sym_expr const & b);
 sym_expr join(sym_expr const & a, sym_expr const & b);
+
+llvm::raw_ostream & operator<<(llvm::raw_ostream &, sym_expr const &);
 
 struct sym_range
 {
@@ -54,3 +58,5 @@ sym_range operator&(sym_range const & a, sym_range const & b);
 
 sym_range operator+(sym_range const & a, sym_range const & b);
 sym_range operator-(sym_range const & a, sym_range const & b);
+
+llvm::raw_ostream & operator<<(llvm::raw_ostream &, sym_range const &);

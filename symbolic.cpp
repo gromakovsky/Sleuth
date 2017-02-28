@@ -1,5 +1,7 @@
 #include "symbolic.h"
 
+#include <llvm/Support/raw_ostream.h>
+
 namespace bl = boost::logic;
 
 sym_expr::sym_expr(llvm::APInt val)
@@ -43,6 +45,11 @@ bool sym_expr::is_top() const
 bool sym_expr::is_bot() const
 {
     return is_special_ == false;
+}
+
+llvm::APInt const & sym_expr::val() const
+{
+    return val_;
 }
 
 sym_expr::sym_expr(bool is_special)
@@ -145,3 +152,18 @@ sym_range operator-(sym_range const & a, sym_range const & b)
 }
 
 sym_range sym_range::full = { sym_expr::bot, sym_expr::top };
+
+llvm::raw_ostream & operator<<(llvm::raw_ostream & out, sym_expr const & e)
+{
+    if (e.is_bot())
+        return out << "bot";
+    else if (e.is_top())
+        return out << "top";
+    else
+        return out << e.val();
+}
+
+llvm::raw_ostream & operator<<(llvm::raw_ostream & out, sym_range const & r)
+{
+    return out << "[" << r.lo << ", " << r.hi << "]";
+}
