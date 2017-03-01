@@ -15,6 +15,26 @@
 namespace fs = boost::filesystem;
 
 /* ------------------------------------------------
+ * Overflow check
+ * ------------------------------------------------
+ */
+
+using boost::tribool;
+
+// Returns true if there is defenitely overflow, indeterminate if it can't
+// determine presense of overflow and false if there is definitely no overflow
+tribool check_overflow(sym_range const & size_range, sym_range const & idx_range)
+{
+    if (size_range.hi <= idx_range.hi || false) // TODO
+        return true;
+
+    if (sym_expr(llvm::APInt()) <= size_range.lo && true) // TODO
+        return false;
+
+    return boost::logic::indeterminate;
+}
+
+/* ------------------------------------------------
  * Computing symbolic ranges
  * ------------------------------------------------
  */
@@ -83,31 +103,66 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const &)
 sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
 {
     if (auto alloca = dynamic_cast<llvm::AllocaInst const *>(&v))
-    {
         return compute_use_range(alloca->getArraySize());
-    }
 
     return sym_range::full;
 }
 
+bool analyzer_t::can_access_ptr(llvm::Value const & v)
+{
+    auto cached = ctx_.vulnerability_info.find(&v);
+    if (cached != ctx_.vulnerability_info.end())
+        return cached->second;
+
+    bool res = true;
+    if (auto gep = dynamic_cast<llvm::GetElementPtrInst const *>(&v))
+        res = can_access_ptr_gep(*gep);
+
+    ctx_.vulnerability_info.insert({&v, res});
+    return true;
+}
+
+bool analyzer_t::can_access_ptr_gep(llvm::GetElementPtrInst const & gep)
+{
+    auto source_type = gep.getSourceElementType();
+    if (!source_type)
+        llvm::errs() << "GEP instruction doesn't have source element type\n";
+
+    llvm::outs() << "Processing GEP with source element type " << *source_type << "\n";
+    llvm::Value const * pointer_operand = gep.getPointerOperand();
+    if (!pointer_operand)
+    {
+        llvm::errs() << "GEP's pointer operand is null\n";
+        return false;
+    }
+
+    sym_range buf_size = compute_buffer_size_range(*pointer_operand);
+    llvm::outs() << "GEP's pointer operand's buffer size is in range " << buf_size << "\n";
+
+    sym_range idx_range = compute_use_range(*gep.idx_begin());
+    llvm::outs() << "GEP's base index in in range " << idx_range << "\n";
+
+    if (check_overflow(buf_size, idx_range))
+        return false;
+
+    return true;
+}
+
 /* ------------------------------------------------
- * Overflow check
+ * Reporting
  * ------------------------------------------------
  */
 
-using boost::tribool;
-
-// Returns true if there is defenitely overflow, indeterminate if it can't
-// determine presense of overflow and false if there is definitely no overflow
-tribool check_overflow(sym_range const & size_range, sym_range const & idx_range)
+void analyzer_t::report_overflow(llvm::Instruction const & instr)
 {
-    if (size_range.hi <= idx_range.hi || false) // TODO
-        return true;
-
-    if (sym_expr(llvm::APInt()) <= size_range.lo && true) // TODO
-        return false;
-
-    return boost::logic::indeterminate;
+    instr.getDebugLoc().print(llvm::outs());
+    llvm::Function const * f = instr.getFunction();
+    auto func_name = f ? f->getName() : "<unknown>";
+    llvm::outs() << " | overflow is possible in function "
+                 << func_name
+                 << ", instruction "
+                 << instr.getOpcodeName()
+                 << "\n";
 }
 
 /* ------------------------------------------------
@@ -133,29 +188,38 @@ void analyzer_t::analyze_basic_block(llvm::BasicBlock const & bb)
 
 void analyzer_t::process_instruction(llvm::Instruction const & instr)
 {
-    if (auto getelementptr = dynamic_cast<llvm::GetElementPtrInst const *>(&instr))
+    // TODO: use visitor
+    if (auto load = dynamic_cast<llvm::LoadInst const *>(&instr))
     {
-        process_getelementptr(*getelementptr);
+        process_load(*load);
+    }
+    else if (auto store = dynamic_cast<llvm::StoreInst const *>(&instr))
+    {
+        process_store(*store);
     }
 }
 
-void analyzer_t::process_getelementptr(llvm::GetElementPtrInst const & gep)
+void analyzer_t::process_load(llvm::LoadInst const & load)
 {
-    auto source_type = gep.getSourceElementType();
-    if (!source_type)
-    {
-        llvm::errs() << "GEP instruction doesn't have source element type\n";
-    }
+    if (auto pointer_operand = load.getPointerOperand())
+        return process_memory_access(load, *pointer_operand);
+    else
+        llvm::errs() << "load instruction doesn't have a pointer operand\n";
+}
 
-    llvm::outs() << "Processing GEP with source element type " << *source_type << "\n";
-    llvm::Value const * pointer_operand = gep.getPointerOperand();
-    if (!pointer_operand)
-    {
-        llvm::errs() << "GEP's pointer operand is null\n";
-        return;
-    }
-    auto buf_size = compute_buffer_size_range(*pointer_operand);
-    llvm::outs() << "GEP's pointer operand's buffer size is " << buf_size << "\n";
+void analyzer_t::process_store(llvm::StoreInst const & store)
+{
+    if (auto pointer_operand = store.getPointerOperand())
+        return process_memory_access(store, *pointer_operand);
+    else
+        llvm::errs() << "store instruction doesn't have a pointer operand\n";
+}
+
+// Process instruction 'instr' which accesses memory pointed to by value 'ptr_val'.
+void analyzer_t::process_memory_access(llvm::Instruction const & instr, llvm::Value const & ptr_val)
+{
+    if (!can_access_ptr(ptr_val))
+        report_overflow(instr);
 }
 
 /* ------------------------------------------------

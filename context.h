@@ -12,4 +12,5 @@ struct context_t
 {
     std::unordered_map<var_id, sym_range> val_ranges;
     new_val_set_t new_val_set;
+    std::unordered_map<var_id, bool> vulnerability_info;
 };
