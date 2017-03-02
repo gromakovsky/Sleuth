@@ -26,7 +26,7 @@ sym_expr & sym_expr::operator-=(sym_expr const & rhs)
     return *this;
 }
 
-bool sym_expr::operator<=(sym_expr const & rhs) const
+bool sym_expr::ule(sym_expr const & rhs) const
 {
     if (is_bot() || rhs.is_top())
         return true;
@@ -34,7 +34,41 @@ bool sym_expr::operator<=(sym_expr const & rhs) const
     if (is_top() || rhs.is_bot())
         return false;
 
+    unsigned w = std::max(val_.getBitWidth(), rhs.val().getBitWidth());
+    if (val_.getBitWidth() < w)
+    {
+        auto new_val = val_.zext(w);
+        return new_val.ule(rhs.val());
+    }
+    else if (rhs.val().getBitWidth() < w)
+    {
+        auto new_val = rhs.val().zext(w);
+        return val_.ule(new_val);
+    }
+
     return val_.ule(rhs.val_);
+}
+
+bool sym_expr::sle(sym_expr const & rhs) const
+{
+    if (is_bot() || rhs.is_top())
+        return true;
+
+    if (is_top() || rhs.is_bot())
+        return false;
+
+    unsigned w = std::max(val_.getBitWidth(), rhs.val().getBitWidth());
+    if (val_.getBitWidth() < w)
+    {
+        auto new_val = val_.sext(w);
+        return new_val.ule(rhs.val());
+    }
+    else if (rhs.val().getBitWidth() < w)
+    {
+        auto new_val = rhs.val().sext(w);
+        return val_.ule(new_val);
+    }
+    return val_.sle(rhs.val_);
 }
 
 bool sym_expr::is_top() const
@@ -75,21 +109,29 @@ sym_expr operator-(sym_expr const & a, sym_expr const & b)
     return res;
 }
 
-sym_expr meet(sym_expr const & a, sym_expr const & b)
+sym_expr meet(sym_expr const & a, sym_expr const & b, bool signed_)
 {
-    if (a <= b)
+    auto le = signed_
+            ? [](sym_expr const & s1, sym_expr const & s2) { return s1.sle(s2); }
+            : [](sym_expr const & s1, sym_expr const & s2) { return s1.ule(s2); };
+
+    if (le(a, b))
         return a;
-    else if (b <= a)
+    else if (le(b, a))
         return b;
     else
         return sym_expr::bot;
 }
 
-sym_expr join(sym_expr const & a, sym_expr const & b)
+sym_expr join(sym_expr const & a, sym_expr const & b, bool signed_)
 {
-    if (a <= b)
+    auto le = signed_
+            ? [](sym_expr const & s1, sym_expr const & s2) { return s1.sle(s2); }
+            : [](sym_expr const & s1, sym_expr const & s2) { return s1.ule(s2); };
+
+    if (le(a, b))
         return b;
-    else if (b <= a)
+    else if (le(b, a))
         return a;
     else
         return sym_expr::top;
@@ -97,15 +139,17 @@ sym_expr join(sym_expr const & a, sym_expr const & b)
 
 sym_range &sym_range::operator|=(sym_range const & rhs)
 {
-    lo = meet(lo, rhs.lo);
-    hi = join(hi, rhs.hi);
+    // TODO: what about sign?
+    lo = meet(lo, rhs.lo, true);
+    hi = join(hi, rhs.hi, true);
     return *this;
 }
 
 sym_range &sym_range::operator&=(sym_range const & rhs)
 {
-    lo = join(lo, rhs.lo);
-    hi = meet(hi, rhs.hi);
+    // TODO: what about sign?
+    lo = join(lo, rhs.lo, true);
+    hi = meet(hi, rhs.hi, true);
     return *this;
 }
 

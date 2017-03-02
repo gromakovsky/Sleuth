@@ -13,7 +13,9 @@ struct sym_expr
     sym_expr & operator+=(sym_expr const &);
     sym_expr & operator-=(sym_expr const &);
 
-    bool operator<=(sym_expr const &) const;
+//    bool operator<=(sym_expr const &) const;
+    bool ule(sym_expr const &) const;
+    bool sle(sym_expr const &) const;
 
     static sym_expr top;
     static sym_expr bot;
@@ -32,8 +34,8 @@ private:
 sym_expr operator+(sym_expr const & a, sym_expr const & b);
 sym_expr operator-(sym_expr const & a, sym_expr const & b);
 
-sym_expr meet(sym_expr const & a, sym_expr const & b);
-sym_expr join(sym_expr const & a, sym_expr const & b);
+sym_expr meet(sym_expr const & a, sym_expr const & b, bool signed_);
+sym_expr join(sym_expr const & a, sym_expr const & b, bool signed_);
 
 llvm::raw_ostream & operator<<(llvm::raw_ostream &, sym_expr const &);
 

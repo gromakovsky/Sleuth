@@ -21,14 +21,19 @@ namespace fs = boost::filesystem;
 
 using boost::tribool;
 
-// Returns true if there is defenitely overflow, indeterminate if it can't
+// Returns true if there definitely is an overflow, indeterminate if it can't
 // determine presense of overflow and false if there is definitely no overflow
 tribool check_overflow(sym_range const & size_range, sym_range const & idx_range)
 {
-    if (size_range.hi <= idx_range.hi || false) // TODO
+    unsigned size_num_bits = size_range.lo.val().getBitWidth();
+    unsigned idx_num_bits = idx_range.lo.val().getBitWidth();
+
+    if (size_range.hi.ule(idx_range.hi)
+            || idx_range.lo.sle(llvm::APInt(idx_num_bits, -1, true)))
         return true;
 
-    if (sym_expr(llvm::APInt()) <= size_range.lo && true) // TODO
+    if (sym_expr(llvm::APInt(idx_num_bits, 0)).sle(idx_range.lo)
+            && idx_range.hi.sle(size_range.lo - llvm::APInt(size_num_bits, 1)))
         return false;
 
     return boost::logic::indeterminate;
@@ -119,7 +124,7 @@ bool analyzer_t::can_access_ptr(llvm::Value const & v)
         res = can_access_ptr_gep(*gep);
 
     ctx_.vulnerability_info.insert({&v, res});
-    return true;
+    return res;
 }
 
 bool analyzer_t::can_access_ptr_gep(llvm::GetElementPtrInst const & gep)
