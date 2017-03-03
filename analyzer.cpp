@@ -5,6 +5,9 @@
 #include <boost/logic/tribool.hpp>
 
 #include <llvm/ADT/StringRef.h>
+#include <llvm/Pass.h>
+#include <llvm/Analysis/MemoryBuiltins.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -107,8 +110,20 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const &)
 // size is number of elements, not bytes
 sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
 {
+    llvm::TargetLibraryInfoWrapperPass tliwp;
+    llvm::TargetLibraryInfo const & tli = tliwp.getTLI();
     if (auto alloca = dynamic_cast<llvm::AllocaInst const *>(&v))
         return compute_use_range(alloca->getArraySize());
+    else if (auto call = dynamic_cast<llvm::CallInst const *>(&v))
+    {
+        if (llvm::isAllocationFn(&v, &tli, true))
+        {
+            llvm::outs() << "Instruction is an allocation function call\n";
+            auto res = compute_use_range(call->getArgOperand(0));
+            llvm::outs() << "Allocated " << res << "\n";
+            return res;
+        }
+    }
 
     return sym_range::full;
 }
@@ -193,7 +208,6 @@ void analyzer_t::analyze_basic_block(llvm::BasicBlock const & bb)
 
 void analyzer_t::process_instruction(llvm::Instruction const & instr)
 {
-    // TODO: use visitor
     if (auto load = dynamic_cast<llvm::LoadInst const *>(&instr))
     {
         process_load(*load);
