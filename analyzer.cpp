@@ -28,15 +28,11 @@ using boost::tribool;
 // determine presense of overflow and false if there is definitely no overflow
 tribool check_overflow(sym_range const & size_range, sym_range const & idx_range)
 {
-    unsigned size_num_bits = size_range.lo.val().getBitWidth();
-    unsigned idx_num_bits = idx_range.lo.val().getBitWidth();
-
-    if (size_range.hi.ule(idx_range.hi)
-            || idx_range.lo.sle(llvm::APInt(idx_num_bits, -1, true)))
+    if (size_range.hi <= idx_range.hi || idx_range.lo <= sym_expr(scalar_t(-1)))
         return true;
 
-    if (sym_expr(llvm::APInt(idx_num_bits, 0)).sle(idx_range.lo)
-            && idx_range.hi.sle(size_range.lo - llvm::APInt(size_num_bits, 1)))
+    if (sym_expr(scalar_t(0)) <= idx_range.lo
+            && idx_range.hi <= size_range.lo - sym_expr(scalar_t(1)))
         return false;
 
     return boost::logic::indeterminate;
@@ -84,27 +80,28 @@ sym_range analyzer_t::compute_def_range_const(llvm::Constant const & c)
     if (!t)
     {
         llvm::errs() << "Constant " << c.getName() << " doesn't have a type";
-        return sym_range::full;
+        return var_sym_range(&c);
     }
 
     if (auto i = dynamic_cast<llvm::ConstantInt const *>(&c))
     {
         llvm::APInt v = i->getValue();
-        sym_expr e(v);
+        scalar_t scalar = v.getLimitedValue();  // TODO: not the best solution obviously
+        sym_expr e(scalar);
         return {e, e};
     }
 
-    llvm::errs() << "Can't compute def range of constant named \""
+    llvm::outs() << "Can't compute def range of constant named \""
                  << c.getName()
                  << "\" with type \""
                  << *t << "\"";
 
-    return sym_range::full;
+    return var_sym_range(&c);
 }
 
-sym_range analyzer_t::compute_def_range_internal(llvm::Value const &)
+sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
 {
-    return sym_range::full;
+    return var_sym_range(&v);
 }
 
 // size is number of elements, not bytes
