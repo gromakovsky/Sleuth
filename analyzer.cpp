@@ -106,8 +106,7 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
 // size is number of elements, not bytes
 sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
 {
-    llvm::TargetLibraryInfoWrapperPass tliwp;
-    llvm::TargetLibraryInfo const & tli = tliwp.getTLI();
+    llvm::TargetLibraryInfo const & tli = ctx_.tliwp.getTLI();
     if (auto alloca = dynamic_cast<llvm::AllocaInst const *>(&v))
         return compute_use_range(alloca->getArraySize());
     else if (auto call = dynamic_cast<llvm::CallInst const *>(&v))
