@@ -128,6 +128,7 @@ sym_range operator&(sym_range const & a, sym_range const & b);
 sym_range operator+(sym_range const & a, sym_range const & b);
 sym_range operator-(sym_range const & a, sym_range const & b);
 sym_range operator*(sym_range const & a, sym_expr const & b);
+sym_range operator*(sym_expr const & a, sym_range const & b);
 sym_range operator*(sym_range const & a, sym_range const & b);
 
 llvm::raw_ostream & operator<<(llvm::raw_ostream &, sym_range const &);

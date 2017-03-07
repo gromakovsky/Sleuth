@@ -423,6 +423,11 @@ sym_range operator*(sym_range const & a, sym_expr const & b)
     return res;
 }
 
+sym_range operator*(sym_expr const & a, sym_range const & b)
+{
+    return b * a;
+}
+
 sym_range operator*(sym_range const & a, sym_range const & b)
 {
     sym_range res = a;

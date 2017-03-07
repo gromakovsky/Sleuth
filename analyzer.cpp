@@ -15,6 +15,8 @@
 #include <llvm/Support/SourceMgr.h>
 
 namespace fs = boost::filesystem;
+using llvm::dyn_cast;
+using llvm::dyn_cast_or_null;
 
 /* ------------------------------------------------
  * Overflow check
@@ -113,10 +115,42 @@ sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
     {
         if (llvm::isAllocationFn(&v, &tli, true))
         {
-            debug_out_ << "Instruction is an allocation function call\n";
-            auto res = compute_use_range(call->getArgOperand(0));
+            auto res = compute_use_range(call->getArgOperand(0));   // TODO: can it be improved?
             debug_out_ << "Allocated " << res << "\n";
             return res;
+        }
+    }
+    else if (llvm::BitCastInst const * bitcast = dyn_cast<llvm::BitCastInst const>(&v))
+    {
+        auto src_type = bitcast->getSrcTy();
+        auto dst_type = bitcast->getDestTy();
+        if (auto src_ptr_type = dyn_cast_or_null<llvm::PointerType>(src_type))
+        {
+            if (auto dst_ptr_type = dyn_cast_or_null<llvm::PointerType>(dst_type))
+            {
+                llvm::Type * src_element_type = src_ptr_type->getElementType();
+                llvm::Type * dst_element_type = dst_ptr_type->getElementType();
+                if (auto src_int_type = dyn_cast_or_null<llvm::IntegerType>(src_element_type))
+                {
+                    if (auto dst_int_type = dyn_cast_or_null<llvm::IntegerType>(dst_element_type))
+                    {
+                        if (src_int_type->getBitWidth() == 8)
+                        {
+                            unsigned dst_width = dst_int_type->getBitWidth();
+                            if (dst_width % 8 == 0)
+                            {
+                                sym_expr multiplier(scalar_t(dst_width / 8));
+                                llvm::Value * operand = bitcast->getOperand(0);
+                                if (operand)
+                                {
+                                    // TODO: divide, not multiply!
+                                    return multiplier * compute_buffer_size_range(*operand);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
