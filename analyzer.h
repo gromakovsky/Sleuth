@@ -1,16 +1,23 @@
 #pragma once
 
 #include <boost/filesystem.hpp>
+#include <boost/logic/tribool.hpp>
 
 #include <llvm/IR/Constant.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include "context.h"
 #include "symbolic.h"
 
 struct analyzer_t
 {
+    analyzer_t(bool report_indeterminate,
+               llvm::raw_ostream & res_out,
+               llvm::raw_ostream & warn_out = llvm::errs(),
+               llvm::raw_ostream & debug_out = llvm::outs());
+
     void analyze_file(boost::filesystem::path const &);
 
 private:
@@ -31,11 +38,16 @@ private:
     sym_range compute_def_range_const(llvm::Constant const &);
     sym_range compute_def_range_internal(llvm::Value const &);
     sym_range compute_buffer_size_range(llvm::Value const &);
-    bool can_access_ptr(llvm::Value const &);
-    bool can_access_ptr_gep(llvm::GetElementPtrInst const &);
+    boost::tribool is_access_vulnerable(llvm::Value const &);
+    boost::tribool is_access_vulnerable_gep(llvm::GetElementPtrInst const &);
 
-    void report_overflow(llvm::Instruction const &);
+    void report_overflow(llvm::Instruction const &, bool sure = true);
+    void report_potential_overflow(llvm::Instruction const &);
 
 private:
     context_t ctx_;
+    bool report_indeterminate_;
+    llvm::raw_ostream & res_out_;
+    llvm::raw_ostream & warn_out_;
+    llvm::raw_ostream & debug_out_;
 };

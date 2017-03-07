@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
     }
 
     fs::path input_path(vm["input"].as<std::string>());
-    analyzer_t analyzer;
+    analyzer_t analyzer(true, llvm::outs());
     analyzer.analyze_file(input_path);
 
     return 0;

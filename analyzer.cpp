@@ -13,7 +13,6 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Support/SourceMgr.h>
-#include <llvm/Support/raw_ostream.h>
 
 namespace fs = boost::filesystem;
 
@@ -79,7 +78,7 @@ sym_range analyzer_t::compute_def_range_const(llvm::Constant const & c)
     llvm::Type * t = c.getType();
     if (!t)
     {
-        llvm::errs() << "Constant " << c.getName() << " doesn't have a type";
+        warn_out_ << "Constant " << c.getName() << " doesn't have a type";
         return var_sym_range(&c);
     }
 
@@ -91,10 +90,10 @@ sym_range analyzer_t::compute_def_range_const(llvm::Constant const & c)
         return {e, e};
     }
 
-    llvm::outs() << "Can't compute def range of constant named \""
-                 << c.getName()
-                 << "\" with type \""
-                 << *t << "\"";
+    debug_out_ << "Can't compute def range of constant named \""
+               << c.getName()
+               << "\" with type \""
+               << *t << "\"";
 
     return var_sym_range(&c);
 }
@@ -115,9 +114,9 @@ sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
     {
         if (llvm::isAllocationFn(&v, &tli, true))
         {
-            llvm::outs() << "Instruction is an allocation function call\n";
+            debug_out_ << "Instruction is an allocation function call\n";
             auto res = compute_use_range(call->getArgOperand(0));
-            llvm::outs() << "Allocated " << res << "\n";
+            debug_out_ << "Allocated " << res << "\n";
             return res;
         }
     }
@@ -125,44 +124,41 @@ sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
     return sym_range::full;
 }
 
-bool analyzer_t::can_access_ptr(llvm::Value const & v)
+tribool analyzer_t::is_access_vulnerable(llvm::Value const & v)
 {
     auto cached = ctx_.vulnerability_info.find(&v);
     if (cached != ctx_.vulnerability_info.end())
         return cached->second;
 
-    bool res = true;
+    tribool res = true;
     if (auto gep = dynamic_cast<llvm::GetElementPtrInst const *>(&v))
-        res = can_access_ptr_gep(*gep);
+        res = is_access_vulnerable_gep(*gep);
 
     ctx_.vulnerability_info.insert({&v, res});
     return res;
 }
 
-bool analyzer_t::can_access_ptr_gep(llvm::GetElementPtrInst const & gep)
+tribool analyzer_t::is_access_vulnerable_gep(llvm::GetElementPtrInst const & gep)
 {
     auto source_type = gep.getSourceElementType();
     if (!source_type)
-        llvm::errs() << "GEP instruction doesn't have source element type\n";
+        warn_out_ << "GEP instruction doesn't have source element type\n";
 
-    llvm::outs() << "Processing GEP with source element type " << *source_type << "\n";
+    debug_out_ << "Processing GEP with source element type " << *source_type << "\n";
     llvm::Value const * pointer_operand = gep.getPointerOperand();
     if (!pointer_operand)
     {
-        llvm::errs() << "GEP's pointer operand is null\n";
+        warn_out_ << "GEP's pointer operand is null\n";
         return false;
     }
 
     sym_range buf_size = compute_buffer_size_range(*pointer_operand);
-    llvm::outs() << "GEP's pointer operand's buffer size is in range " << buf_size << "\n";
+    debug_out_ << "GEP's pointer operand's buffer size is in range " << buf_size << "\n";
 
     sym_range idx_range = compute_use_range(*gep.idx_begin());
-    llvm::outs() << "GEP's base index in in range " << idx_range << "\n";
+    debug_out_ << "GEP's base index in in range " << idx_range << "\n";
 
-    if (check_overflow(buf_size, idx_range))
-        return false;
-
-    return true;
+    return check_overflow(buf_size, idx_range);
 }
 
 /* ------------------------------------------------
@@ -170,16 +166,26 @@ bool analyzer_t::can_access_ptr_gep(llvm::GetElementPtrInst const & gep)
  * ------------------------------------------------
  */
 
-void analyzer_t::report_overflow(llvm::Instruction const & instr)
+void analyzer_t::report_overflow(llvm::Instruction const & instr, bool sure)
 {
-    instr.getDebugLoc().print(llvm::outs());
+    instr.getDebugLoc().print(res_out_);
     llvm::Function const * f = instr.getFunction();
     auto func_name = f ? f->getName() : "<unknown>";
-    llvm::outs() << " | overflow is possible in function "
-                 << func_name
-                 << ", instruction "
-                 << instr.getOpcodeName()
-                 << "\n";
+    res_out_ << " | overflow "
+             << (sure ? "is possible" : "may be possible (but not surely)")
+             << " in function "
+             << func_name
+             << ", instruction "
+             << instr.getOpcodeName()
+             << "\n";
+}
+
+void analyzer_t::report_potential_overflow(llvm::Instruction const & instr)
+{
+    if (!report_indeterminate_)
+        return;
+
+    report_overflow(instr, false);
 }
 
 /* ------------------------------------------------
@@ -189,7 +195,7 @@ void analyzer_t::report_overflow(llvm::Instruction const & instr)
 
 void analyzer_t::analyze_function(llvm::Function const & f)
 {
-    llvm::outs() << "Analyzing function " << f.getName() << "\n";
+    debug_out_ << "Analyzing function " << f.getName() << "\n";
 
     for (auto const & bb : f)
         analyze_basic_block(bb);
@@ -197,7 +203,7 @@ void analyzer_t::analyze_function(llvm::Function const & f)
 
 void analyzer_t::analyze_basic_block(llvm::BasicBlock const & bb)
 {
-    llvm::outs() << "Analyzing basic block " << bb.getName() << "\n";
+//    debug_out_ << "Analyzing basic block " << bb.getName() << "\n";
 
     for (auto const & i : bb)
         process_instruction(i);
@@ -220,7 +226,7 @@ void analyzer_t::process_load(llvm::LoadInst const & load)
     if (auto pointer_operand = load.getPointerOperand())
         return process_memory_access(load, *pointer_operand);
     else
-        llvm::errs() << "load instruction doesn't have a pointer operand\n";
+        warn_out_ << "load instruction doesn't have a pointer operand\n";
 }
 
 void analyzer_t::process_store(llvm::StoreInst const & store)
@@ -228,20 +234,34 @@ void analyzer_t::process_store(llvm::StoreInst const & store)
     if (auto pointer_operand = store.getPointerOperand())
         return process_memory_access(store, *pointer_operand);
     else
-        llvm::errs() << "store instruction doesn't have a pointer operand\n";
+        warn_out_ << "store instruction doesn't have a pointer operand\n";
 }
 
 // Process instruction 'instr' which accesses memory pointed to by value 'ptr_val'.
 void analyzer_t::process_memory_access(llvm::Instruction const & instr, llvm::Value const & ptr_val)
 {
-    if (!can_access_ptr(ptr_val))
+    tribool overflow = is_access_vulnerable(ptr_val);
+    if (overflow)
         report_overflow(instr);
+    else if (boost::logic::indeterminate(overflow))
+        report_potential_overflow(instr);
 }
 
 /* ------------------------------------------------
  * LLVM wrappers
  * ------------------------------------------------
  */
+
+analyzer_t::analyzer_t(bool report_indeterminate,
+                       llvm::raw_ostream & res_out,
+                       llvm::raw_ostream & warn_out,
+                       llvm::raw_ostream & debug_out)
+    : report_indeterminate_(report_indeterminate)
+    , res_out_(res_out)
+    , warn_out_(warn_out)
+    , debug_out_(debug_out)
+{
+}
 
 void analyzer_t::analyze_file(fs::path const & p)
 {
@@ -260,11 +280,11 @@ void analyzer_t::analyze_file(fs::path const & p)
 
 void analyzer_t::analyze_module(llvm::Module const & module)
 {
-    std::cout << "Analyzing module "
-              << module.getModuleIdentifier()
-              << " corresponding to "
-              << module.getSourceFileName()
-              << std::endl;
+    debug_out_ << "Analyzing module "
+               << module.getModuleIdentifier()
+               << " corresponding to "
+               << module.getSourceFileName()
+               << "\n";
 
     for (auto const & f : module)
         analyze_function(f);
