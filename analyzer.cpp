@@ -139,12 +139,11 @@ sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
                             unsigned dst_width = dst_int_type->getBitWidth();
                             if (dst_width % 8 == 0)
                             {
-                                sym_expr multiplier(scalar_t(dst_width / 8));
+                                sym_expr k(scalar_t(dst_width / 8));
                                 llvm::Value * operand = bitcast->getOperand(0);
                                 if (operand)
                                 {
-                                    // TODO: divide, not multiply!
-                                    return multiplier * compute_buffer_size_range(*operand);
+                                    return compute_buffer_size_range(*operand) / k;
                                 }
                             }
                         }
