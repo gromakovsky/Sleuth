@@ -331,7 +331,7 @@ void sym_expr::print(llvm::raw_ostream & out) const
                 out << " + ";
         }
 
-        if (delta_)
+        if (delta_ || !coeff_)
             out << delta_;
     }
 }
