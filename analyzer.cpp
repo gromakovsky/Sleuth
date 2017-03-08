@@ -54,6 +54,9 @@ sym_range analyzer_t::compute_def_range(var_id const & v)
     if (auto const_v = dynamic_cast<llvm::Constant const *>(v))
         return compute_def_range_const(*const_v);
 
+    if (!v)
+        return var_sym_range(v);
+
     auto it = ctx_.val_ranges.find(v);
     if (it != ctx_.val_ranges.end())
         return it->second;
@@ -104,6 +107,18 @@ sym_range analyzer_t::compute_def_range_const(llvm::Constant const & c)
 
 sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
 {
+    if (auto bin_op = dynamic_cast<llvm::BinaryOperator const *>(&v))
+    {
+        if (bin_op->getOpcode() == llvm::BinaryOperator::Add)
+            return compute_use_range(bin_op->getOperand(0)) + compute_use_range(bin_op->getOperand(1));
+        else if (bin_op->getOpcode() == llvm::BinaryOperator::Sub)
+            return compute_use_range(bin_op->getOperand(0)) - compute_use_range(bin_op->getOperand(1));
+        else if (bin_op->getOpcode() == llvm::BinaryOperator::Mul)
+            return compute_use_range(bin_op->getOperand(0)) * compute_use_range(bin_op->getOperand(1));
+        else if (bin_op->getOpcode() == llvm::BinaryOperator::SDiv)
+            return compute_use_range(bin_op->getOperand(0)) / compute_use_range(bin_op->getOperand(1));
+    }
+
     return var_sym_range(&v);
 }
 

@@ -320,12 +320,20 @@ void sym_expr::print(llvm::raw_ostream & out) const
         out << "bot";
     else if (is_top())
         out << "top";
-    else if (!coeff_)
-        out << delta_;
-    else if (!delta_)
-        out << coeff_ << " * " << *atom_;
-    else
-        out << coeff_ << " * " << *atom_ << " + " << delta_;
+    else {
+        if (coeff_)
+        {
+            if (coeff_ != 1)
+                out << coeff_ << " * ";
+
+            out << *atom_;
+            if (delta_)
+                out << " + ";
+        }
+
+        if (delta_)
+            out << delta_;
+    }
 }
 
 sym_atomic_ptr sym_expr::to_atom_no_delta() const
