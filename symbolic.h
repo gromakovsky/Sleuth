@@ -86,6 +86,8 @@ struct sym_expr
     sym_expr & operator/=(sym_expr const &);
 
     bool operator<=(sym_expr const &) const;
+    bool operator==(sym_expr const &) const;
+    bool operator!=(sym_expr const &) const;
 
     static sym_expr top;
     static sym_expr bot;
@@ -149,6 +151,9 @@ sym_range operator*(sym_expr const & a, sym_range const & b);
 sym_range operator*(sym_range const & a, sym_range const & b);
 sym_range operator/(sym_range const & a, sym_expr const & b);
 sym_range operator/(sym_range const & a, sym_range const & b);
+
+bool operator==(sym_range const & a, sym_range const & b);
+bool operator!=(sym_range const & a, sym_range const & b);
 
 llvm::raw_ostream & operator<<(llvm::raw_ostream &, sym_range const &);
 

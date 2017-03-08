@@ -288,6 +288,22 @@ bool sym_expr::operator<=(sym_expr const & rhs) const
     return false;
 }
 
+bool sym_expr::operator==(sym_expr const & rhs) const
+{
+    if (is_bot()) return rhs.is_bot();
+    if (is_top()) return rhs.is_top();
+
+    if (!bl::indeterminate(rhs.is_special_))
+        return false;
+
+    return delta_ == rhs.delta_ && coeff_ == rhs.coeff_ && *atom_ == *rhs.atom_;
+}
+
+bool sym_expr::operator!=(sym_expr const & rhs) const
+{
+    return !(*this == rhs);
+}
+
 bool sym_expr::is_top() const
 {
     return is_special_ == true;
@@ -534,6 +550,16 @@ sym_range operator/(sym_range const & a, sym_range const & b)
 }
 
 sym_range sym_range::full = { sym_expr::bot, sym_expr::top };
+
+bool operator==(sym_range const & a, sym_range const & b)
+{
+    return a.lo == b.lo && a.hi == b.hi;
+}
+
+bool operator!=(sym_range const & a, sym_range const & b)
+{
+    return !(a == b);
+}
 
 llvm::raw_ostream & operator<<(llvm::raw_ostream & out, sym_range const & r)
 {
