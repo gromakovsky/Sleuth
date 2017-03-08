@@ -558,6 +558,7 @@ sym_range operator/(sym_range const & a, sym_range const & b)
 }
 
 sym_range sym_range::full = { sym_expr::bot, sym_expr::top };
+sym_range sym_range::empty = { sym_expr::top, sym_expr::bot };
 
 bool operator==(sym_range const & a, sym_range const & b)
 {

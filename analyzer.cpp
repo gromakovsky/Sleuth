@@ -109,14 +109,23 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
 {
     if (auto bin_op = dynamic_cast<llvm::BinaryOperator const *>(&v))
     {
+        var_id op0 = bin_op->getOperand(0), op1 = bin_op->getOperand(1);
         if (bin_op->getOpcode() == llvm::BinaryOperator::Add)
-            return compute_use_range(bin_op->getOperand(0)) + compute_use_range(bin_op->getOperand(1));
+            return compute_use_range(op0) + compute_use_range(op1);
         else if (bin_op->getOpcode() == llvm::BinaryOperator::Sub)
-            return compute_use_range(bin_op->getOperand(0)) - compute_use_range(bin_op->getOperand(1));
+            return compute_use_range(op0) - compute_use_range(op1);
         else if (bin_op->getOpcode() == llvm::BinaryOperator::Mul)
-            return compute_use_range(bin_op->getOperand(0)) * compute_use_range(bin_op->getOperand(1));
+            return compute_use_range(op0) * compute_use_range(op1);
         else if (bin_op->getOpcode() == llvm::BinaryOperator::SDiv)
-            return compute_use_range(bin_op->getOperand(0)) / compute_use_range(bin_op->getOperand(1));
+            return compute_use_range(op0) / compute_use_range(op1);
+    }
+    else if (auto phi = dynamic_cast<llvm::PHINode const *>(&v))
+    {
+        sym_range r(sym_range::empty);
+        for (var_id v : phi->incoming_values())
+            r |= compute_use_range(v);
+
+        return r;
     }
 
     return var_sym_range(&v);

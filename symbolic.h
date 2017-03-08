@@ -139,6 +139,7 @@ struct sym_range
     sym_range & operator/=(sym_range const &);
 
     static sym_range full;
+    static sym_range empty;
 };
 
 sym_range operator|(sym_range const & a, sym_range const & b);
