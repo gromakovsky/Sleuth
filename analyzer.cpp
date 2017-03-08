@@ -188,7 +188,7 @@ tribool analyzer_t::is_access_vulnerable_gep(llvm::GetElementPtrInst const & gep
     debug_out_ << "GEP's pointer operand's buffer size is in range " << buf_size << "\n";
 
     sym_range idx_range = compute_use_range(*gep.idx_begin());
-    debug_out_ << "GEP's base index in in range " << idx_range << "\n";
+    debug_out_ << "GEP's base index is in range " << idx_range << "\n";
 
     return check_overflow(buf_size, idx_range);
 }
