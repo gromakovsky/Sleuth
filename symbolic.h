@@ -21,6 +21,17 @@ using sym_atomic_ptr = std::shared_ptr<sym_atomic>;
 
 llvm::raw_ostream & operator<<(llvm::raw_ostream &, sym_atomic const &);
 
+struct atomic_const : sym_atomic
+{
+    atomic_const(scalar_t);
+
+    virtual void print(llvm::raw_ostream &) const override;
+    virtual bool operator==(sym_atomic const &) const override;
+
+private:
+    scalar_t val_;
+};
+
 struct atomic_var : sym_atomic
 {
     atomic_var(var_id);
@@ -50,6 +61,7 @@ struct atomic_bin_op : sym_atomic
         Plus,
         Minus,
         Mult,
+        Div,
     };
 
     atomic_bin_op(sym_atomic_ptr const & lhs, sym_atomic_ptr const & rhs, op_t);
@@ -71,6 +83,7 @@ struct sym_expr
     sym_expr & operator+=(sym_expr const &);
     sym_expr & operator-=(sym_expr const &);
     sym_expr & operator*=(sym_expr const &);
+    sym_expr & operator/=(sym_expr const &);
 
     bool operator<=(sym_expr const &) const;
 
@@ -84,6 +97,7 @@ struct sym_expr
 
 private:
     sym_atomic_ptr to_atom_no_delta() const;
+    sym_atomic_ptr to_atom() const;
 
 private:
     // actual value is `coeff_ * atom_ + b` unless it's a special expression
@@ -98,6 +112,7 @@ private:
 sym_expr operator+(sym_expr const & a, sym_expr const & b);
 sym_expr operator-(sym_expr const & a, sym_expr const & b);
 sym_expr operator*(sym_expr const & a, sym_expr const & b);
+sym_expr operator/(sym_expr const & a, sym_expr const & b);
 
 sym_expr meet(sym_expr const & a, sym_expr const & b);
 sym_expr join(sym_expr const & a, sym_expr const & b);
@@ -118,6 +133,8 @@ struct sym_range
     sym_range & operator-=(sym_range const &);
     sym_range & operator*=(sym_expr const &);
     sym_range & operator*=(sym_range const &);
+    sym_range & operator/=(sym_expr const &);
+    sym_range & operator/=(sym_range const &);
 
     static sym_range full;
 };
@@ -130,6 +147,8 @@ sym_range operator-(sym_range const & a, sym_range const & b);
 sym_range operator*(sym_range const & a, sym_expr const & b);
 sym_range operator*(sym_expr const & a, sym_range const & b);
 sym_range operator*(sym_range const & a, sym_range const & b);
+sym_range operator/(sym_range const & a, sym_expr const & b);
+sym_range operator/(sym_range const & a, sym_range const & b);
 
 llvm::raw_ostream & operator<<(llvm::raw_ostream &, sym_range const &);
 

@@ -10,6 +10,24 @@ llvm::raw_ostream & operator<<(llvm::raw_ostream & out, sym_atomic const & a)
     return out;
 }
 
+atomic_const::atomic_const(scalar_t val)
+    : val_(val)
+{
+}
+
+void atomic_const::print(llvm::raw_ostream & out) const
+{
+    out << val_;
+}
+
+bool atomic_const::operator==(sym_atomic const & rhs) const
+{
+    if (auto c = dynamic_cast<atomic_const const *>(&rhs))
+        return c->val_ == val_;
+
+    return false;
+}
+
 atomic_var::atomic_var(var_id var)
     : var_(var)
 {
@@ -70,7 +88,9 @@ void atomic_bin_op::print(llvm::raw_ostream & out) const
     case Plus: out << "+"; break;
     case Minus: out << "-"; break;
     case Mult: out << "*"; break;
+    case Div: out << "/"; break;
     }
+    out << *rhs_;
 }
 
 bool atomic_bin_op::operator==(sym_atomic const & rhs) const
@@ -166,16 +186,9 @@ sym_expr & sym_expr::operator-=(sym_expr const & rhs)
 
 sym_expr & sym_expr::operator*=(sym_expr const & rhs)
 {
-    if (!bl::indeterminate(rhs.is_special_))
+    // bad case so nothing smart
+    if (!bl::indeterminate(rhs.is_special_) || !bl::indeterminate(is_special_))
         return *this;
-
-    // strange case actually
-    if (!bl::indeterminate(rhs.is_special_))
-    {
-        is_special_ = rhs.is_special_;
-        atom_.reset();
-        return *this;
-    }
 
     // suppose we are computing `(ax + b) * (cy + d)`
     scalar_t a = coeff_;
@@ -232,6 +245,34 @@ sym_expr & sym_expr::operator*=(sym_expr const & rhs)
     return *this;
 }
 
+sym_expr & sym_expr::operator/=(sym_expr const & rhs)
+{
+    // bad case so nothing smart
+    if (!bl::indeterminate(rhs.is_special_) || !bl::indeterminate(is_special_))
+        return *this;
+
+    // suppose we are computing `(ax + b) * (cy + d)`
+    scalar_t a = coeff_;
+    scalar_t b = delta_;
+    scalar_t c = rhs.coeff_;
+    scalar_t d = rhs.delta_;
+
+    if (c == 0)
+    {
+        coeff_ /= d;  // caller is responsible for `rhs ≠ 0`
+        delta_ /= d;
+    }
+    else
+    {
+        // value should be `(ax + b) / (cy + d) + 0`
+        delta_ = 0;
+        coeff_ = 1;
+        atom_ = std::make_shared<atomic_bin_op>(to_atom(), rhs.to_atom(), atomic_bin_op::Div);
+    }
+
+    return *this;
+}
+
 bool sym_expr::operator<=(sym_expr const & rhs) const
 {
     if (is_bot() || rhs.is_top())
@@ -276,6 +317,16 @@ sym_atomic_ptr sym_expr::to_atom_no_delta() const
     return coeff_ == 1 ? atom_ : std::make_shared<atomic_linear>(atom_, coeff_);
 }
 
+sym_atomic_ptr sym_expr::to_atom() const
+{
+    sym_atomic_ptr no_delta_atom = to_atom_no_delta();
+    if (delta_ == 0)
+        return no_delta_atom;
+
+    auto delta_atom = std::make_shared<atomic_const>(delta_);
+    return std::make_shared<atomic_bin_op>(no_delta_atom, delta_atom, atomic_bin_op::Plus);
+}
+
 sym_expr::sym_expr(bool is_special)
     : coeff_(0)
     , delta_(0)
@@ -304,6 +355,13 @@ sym_expr operator*(sym_expr const & a, sym_expr const & b)
 {
     sym_expr res(a);
     res *= b;
+    return res;
+}
+
+sym_expr operator/(sym_expr const & a, sym_expr const & b)
+{
+    sym_expr res(a);
+    res /= b;
     return res;
 }
 
@@ -388,6 +446,32 @@ sym_range & sym_range::operator*=(sym_range const & rhs)
     return *this;
 }
 
+sym_range & sym_range::operator/=(sym_expr const & e)
+{
+    sym_range tmp = { hi / e, lo / e };
+    lo /= e;
+    hi /= e;
+    *this |= tmp;
+    return *this;
+}
+
+sym_range & sym_range::operator/=(sym_range const & rhs)
+{
+    if (rhs.hi <= sym_expr(scalar_t(-1)) || sym_expr(scalar_t(1)) <= rhs.lo)
+    {
+        sym_range tmp = *this / rhs.hi;
+        *this /= rhs.lo;
+        *this |= tmp;
+    }
+    else
+    {
+        lo = sym_expr::bot;
+        hi = sym_expr::top;
+    }
+
+    return *this;
+}
+
 sym_range operator|(sym_range const & a, sym_range const & b)
 {
     sym_range res = a;
@@ -432,6 +516,20 @@ sym_range operator*(sym_range const & a, sym_range const & b)
 {
     sym_range res = a;
     res *= b;
+    return res;
+}
+
+sym_range operator/(sym_range const & a, sym_expr const & b)
+{
+    sym_range res = a;
+    res /= b;
+    return res;
+}
+
+sym_range operator/(sym_range const & a, sym_range const & b)
+{
+    sym_range res = a;
+    res /= b;
     return res;
 }
 
