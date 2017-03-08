@@ -127,6 +127,55 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
 
         return r;
     }
+    else if (auto load = dynamic_cast<llvm::LoadInst const *>(&v))
+    {
+        if (auto gep = dynamic_cast<llvm::GetElementPtrInst const *>(load->getPointerOperand()))
+        {
+            if (gep->getNumIndices() == 2)  // TODO: check that 0-th index is 0
+            {
+                llvm::ConstantDataSequential const * const_seq =
+                        dynamic_cast<llvm::ConstantDataSequential const *>(gep->getPointerOperand());
+                if (!const_seq)
+                {
+                    if (auto gv = dynamic_cast<llvm::GlobalVariable const *>(gep->getPointerOperand()))
+                    {
+                        if (gv->isConstant())
+                            const_seq = dynamic_cast<llvm::ConstantDataSequential const *>(gv->getInitializer());
+                    }
+                }
+                if (const_seq)
+                {
+                    auto begin = gep->idx_begin();
+                    begin++;
+                    sym_range idx_range = compute_use_range(*begin);
+                    if (auto scalar_r = to_scalar_range(idx_range))
+                    {
+                        if (scalar_r->second < 0 || scalar_r->first >= const_seq->getNumElements())
+                        {
+                            load->getDebugLoc().print(res_out_);
+                            res_out_ << "vulnerable access of constant aggregate\n";
+                        }
+                        else
+                        {
+                            sym_range res = sym_range::empty;
+                            for (unsigned i = scalar_r->first; i <= scalar_r->second; ++i)
+                            {
+                                scalar_t n(const_seq->getElementAsInteger(i));
+                                sym_expr e(n);
+                                res.lo = meet(res.lo, e);
+                                res.hi = join(res.hi, e);
+                            }
+                            return res;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else if (auto sext = dynamic_cast<llvm::SExtInst const *>(&v))
+    {
+        return compute_use_range(sext->getOperand(0));
+    }
 
     return var_sym_range(&v);
 }
@@ -146,7 +195,7 @@ sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
             return res;
         }
     }
-    else if (llvm::BitCastInst const * bitcast = dyn_cast<llvm::BitCastInst const>(&v))
+    else if (auto bitcast = dynamic_cast<llvm::BitCastInst const *>(&v))
     {
         auto src_type = bitcast->getSrcTy();
         auto dst_type = bitcast->getDestTy();
@@ -178,8 +227,12 @@ sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
             }
         }
     }
+    else if (auto const_seq = dynamic_cast<llvm::ConstantDataSequential const *>(&v))
+    {
+        return const_sym_range(const_seq->getNumElements());
+    }
 
-    return sym_range::full;
+    return { sym_expr(scalar_t(1)), sym_expr::top };
 }
 
 tribool analyzer_t::is_access_vulnerable(llvm::Value const & v)

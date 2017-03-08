@@ -336,6 +336,14 @@ void sym_expr::print(llvm::raw_ostream & out) const
     }
 }
 
+boost::optional<scalar_t> sym_expr::to_scalar() const
+{
+    if (!coeff_)
+        return delta_;
+
+    return boost::none;
+}
+
 sym_atomic_ptr sym_expr::to_atom_no_delta() const
 {
     return coeff_ == 1 ? atom_ : std::make_shared<atomic_linear>(atom_, coeff_);
@@ -575,8 +583,24 @@ llvm::raw_ostream & operator<<(llvm::raw_ostream & out, sym_range const & r)
     return out << "[" << r.lo << "; " << r.hi << "]";
 }
 
+sym_range const_sym_range(scalar_t v)
+{
+    sym_expr e(v);
+    return {e, e};
+}
+
 sym_range var_sym_range(var_id const & v)
 {
     sym_expr e = var_sym_expr(v);
     return {e, e};
+}
+
+boost::optional<scalar_range> to_scalar_range(sym_range const & r)
+{
+    auto lo = r.lo.to_scalar();
+    auto hi = r.hi.to_scalar();
+    if (lo && hi)
+        return std::make_pair(*lo, *hi);
+
+    return boost::none;
 }

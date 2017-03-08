@@ -3,6 +3,7 @@
 #include <memory>
 
 #include <boost/logic/tribool.hpp>
+#include <boost/optional.hpp>
 
 #include <llvm/ADT/APInt.h>
 
@@ -97,6 +98,8 @@ struct sym_expr
 
     void print(llvm::raw_ostream &) const;
 
+    boost::optional<scalar_t> to_scalar() const;
+
 private:
     sym_atomic_ptr to_atom_no_delta() const;
     sym_atomic_ptr to_atom() const;
@@ -158,4 +161,9 @@ bool operator!=(sym_range const & a, sym_range const & b);
 
 llvm::raw_ostream & operator<<(llvm::raw_ostream &, sym_range const &);
 
+sym_range const_sym_range(scalar_t);
 sym_range var_sym_range(var_id const &);
+
+using scalar_range = std::pair<scalar_t, scalar_t>;
+
+boost::optional<scalar_range> to_scalar_range(sym_range const &);
