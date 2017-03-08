@@ -563,7 +563,7 @@ bool operator!=(sym_range const & a, sym_range const & b)
 
 llvm::raw_ostream & operator<<(llvm::raw_ostream & out, sym_range const & r)
 {
-    return out << "[" << r.lo << ", " << r.hi << "]";
+    return out << "[" << r.lo << "; " << r.hi << "]";
 }
 
 sym_range var_sym_range(var_id const & v)

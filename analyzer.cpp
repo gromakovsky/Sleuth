@@ -59,9 +59,11 @@ sym_range analyzer_t::compute_def_range(var_id const & v)
         return it->second;
 
     ctx_.new_val_set.insert(v);
-    ctx_.val_ranges.insert({v, sym_range::full});
+    ctx_.val_ranges.emplace(v, sym_range::full);
 
-    ctx_.val_ranges.insert({v, compute_def_range_internal(*v)});
+    auto range = compute_def_range_internal(*v);
+    ctx_.val_ranges.erase(v);
+    ctx_.val_ranges.emplace(v, std::move(range));
 
     update_def_range(v);
     ctx_.new_val_set.erase(v);
