@@ -179,7 +179,7 @@ tribool analyzer_t::is_access_vulnerable(llvm::Value const & v)
     if (cached != ctx_.vulnerability_info.end())
         return cached->second;
 
-    tribool res = true;
+    tribool res = false;
     if (auto gep = dynamic_cast<llvm::GetElementPtrInst const *>(&v))
         res = is_access_vulnerable_gep(*gep);
 
