@@ -44,9 +44,10 @@ tribool check_overflow(sym_range const & size_range, sym_range const & idx_range
  * ------------------------------------------------
  */
 
-sym_range analyzer_t::compute_use_range(var_id const & v, void *)
+sym_range analyzer_t::compute_use_range(var_id const & v, program_point_t p)
 {
-    return compute_def_range(v);
+    sym_range r = compute_def_range(v);
+    return refine_def_range(v, r, p);
 }
 
 sym_range analyzer_t::compute_def_range(var_id const & v)
@@ -100,6 +101,11 @@ void analyzer_t::update_def_range(var_id const & v)
             update_def_range(w);
         }
     }
+}
+
+sym_range analyzer_t::refine_def_range(var_id v, sym_range const & def_range, program_point_t p)
+{
+    return def_range;
 }
 
 sym_range analyzer_t::compute_def_range_const(llvm::Constant const & c)
@@ -202,6 +208,11 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
     return var_sym_range(&v);
 }
 
+/* ------------------------------------------------
+ * Computing buffer size
+ * ------------------------------------------------
+ */
+
 // size is number of elements, not bytes
 sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
 {
@@ -256,6 +267,11 @@ sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
 
     return { sym_expr(scalar_t(1)), sym_expr::top };
 }
+
+/* ------------------------------------------------
+ * Vulnerability detection
+ * ------------------------------------------------
+ */
 
 tribool analyzer_t::is_access_vulnerable(llvm::Value const & v)
 {

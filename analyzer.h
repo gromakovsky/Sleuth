@@ -11,6 +11,8 @@
 #include "context.h"
 #include "symbolic.h"
 
+using program_point_t = llvm::Instruction const *;
+
 struct analyzer_t
 {
     analyzer_t(bool report_indeterminate,
@@ -32,8 +34,9 @@ private:
     void process_memory_access(llvm::Instruction const &, llvm::Value const &);
 
     sym_range compute_def_range(var_id const &);
-    sym_range compute_use_range(var_id const &, void * = nullptr);
+    sym_range compute_use_range(var_id const &, program_point_t = nullptr);
     void update_def_range(var_id const &);
+    sym_range refine_def_range(var_id, sym_range const &, program_point_t = nullptr);
 
     sym_range compute_def_range_const(llvm::Constant const &);
     sym_range compute_def_range_internal(llvm::Value const &);
