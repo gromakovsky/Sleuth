@@ -103,11 +103,6 @@ void analyzer_t::update_def_range(var_id const & v)
     }
 }
 
-sym_range analyzer_t::refine_def_range(var_id v, sym_range const & def_range, program_point_t p)
-{
-    return def_range;
-}
-
 sym_range analyzer_t::compute_def_range_const(llvm::Constant const & c)
 {
     llvm::Type * t = c.getType();
@@ -138,20 +133,22 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
     if (auto bin_op = dynamic_cast<llvm::BinaryOperator const *>(&v))
     {
         var_id op0 = bin_op->getOperand(0), op1 = bin_op->getOperand(1);
+        sym_range op0_range = compute_use_range(op0, bin_op),
+                  op1_range = compute_use_range(op1, bin_op);
         if (bin_op->getOpcode() == llvm::BinaryOperator::Add)
-            return compute_use_range(op0) + compute_use_range(op1);
+            return op0_range + op1_range;
         else if (bin_op->getOpcode() == llvm::BinaryOperator::Sub)
-            return compute_use_range(op0) - compute_use_range(op1);
+            return op0_range - op1_range;
         else if (bin_op->getOpcode() == llvm::BinaryOperator::Mul)
-            return compute_use_range(op0) * compute_use_range(op1);
+            return op0_range * op1_range;
         else if (bin_op->getOpcode() == llvm::BinaryOperator::SDiv)
-            return compute_use_range(op0) / compute_use_range(op1);
+            return op0_range / op1_range;
     }
     else if (auto phi = dynamic_cast<llvm::PHINode const *>(&v))
     {
         sym_range r(sym_range::empty);
-        for (var_id v : phi->incoming_values())
-            r |= compute_use_range(v);
+        for (var_id inc_v : phi->incoming_values())
+            r |= compute_use_range(inc_v, phi);
 
         return r;
     }
@@ -175,7 +172,7 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
                 {
                     auto begin = gep->idx_begin();
                     begin++;
-                    sym_range idx_range = compute_use_range(*begin);
+                    sym_range idx_range = compute_use_range(*begin, gep);
                     if (auto scalar_r = to_scalar_range(idx_range))
                     {
                         if (scalar_r->second < 0 || scalar_r->first >= const_seq->getNumElements())
@@ -202,10 +199,76 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
     }
     else if (auto sext = dynamic_cast<llvm::SExtInst const *>(&v))
     {
-        return compute_use_range(sext->getOperand(0));
+        return compute_use_range(sext->getOperand(0), sext);
     }
 
     return var_sym_range(&v);
+}
+/* ------------------------------------------------
+ * Control dependencies
+ * ------------------------------------------------
+ */
+
+sym_range analyzer_t::refine_def_range(var_id v, sym_range const & def_range, program_point_t p)
+{
+    if (!p)
+        return def_range;
+
+    llvm::BasicBlock const * bb = p->getParent();
+    if (!bb)
+        return def_range;
+
+    llvm::BasicBlock const * pred = bb->getSinglePredecessor();
+    if (!pred)
+        return def_range;
+
+    llvm::TerminatorInst const * terminator = pred->getTerminator();
+    if (auto br = dynamic_cast<llvm::BranchInst const *>(terminator))
+    {
+        bool is_true_succ = br->getSuccessor(0) == bb;
+        if (auto cmp_inst = dynamic_cast<llvm::ICmpInst const *>(br->getCondition()))
+        {
+            if (cmp_inst->getPredicate() == llvm::ICmpInst::ICMP_EQ)
+            {
+                auto pr_type = is_true_succ ? PT_EQ : PT_NE;
+                return refine_def_range_internal(v, def_range, pr_type,
+                                                 cmp_inst->getOperand(0),
+                                                 cmp_inst->getOperand(1),
+                                                 cmp_inst);
+            }
+            if (cmp_inst->getPredicate() == llvm::ICmpInst::ICMP_NE)
+            {
+                auto pr_type = is_true_succ ? PT_NE : PT_EQ;
+                return refine_def_range_internal(v, def_range, pr_type,
+                                                 cmp_inst->getOperand(0),
+                                                 cmp_inst->getOperand(1),
+                                                 cmp_inst);
+            }
+        }
+    }
+
+    return def_range;
+}
+
+sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_range,
+                                                analyzer_t::predicate_type pt,
+                                                var_id a, var_id b, program_point_t point)
+{
+    if (pt == PT_NE)
+        return def_range; // TODO
+
+    boost::optional<sym_range> to_intersect;
+    if (v == a)
+        to_intersect = compute_use_range(b, point);
+    else if (v == b)
+        to_intersect = compute_use_range(a, point);
+
+    if (to_intersect)
+    {
+        llvm::outs() << "control dependency leads to intersection with " << *to_intersect << "\n";
+        return def_range & *to_intersect;
+    }
+    return def_range;
 }
 
 /* ------------------------------------------------
@@ -218,12 +281,12 @@ sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
 {
     llvm::TargetLibraryInfo const & tli = ctx_.tliwp.getTLI();
     if (auto alloca = dynamic_cast<llvm::AllocaInst const *>(&v))
-        return compute_use_range(alloca->getArraySize());
+        return compute_use_range(alloca->getArraySize(), alloca);
     else if (auto call = dynamic_cast<llvm::CallInst const *>(&v))
     {
         if (llvm::isAllocationFn(&v, &tli, true))
         {
-            auto res = compute_use_range(call->getArgOperand(0));   // TODO: can it be improved?
+            auto res = compute_use_range(call->getArgOperand(0), call);   // TODO: can it be improved?
             debug_out_ << "Allocated " << res << "\n";
             return res;
         }
@@ -304,7 +367,7 @@ tribool analyzer_t::is_access_vulnerable_gep(llvm::GetElementPtrInst const & gep
     sym_range buf_size = compute_buffer_size_range(*pointer_operand);
     debug_out_ << "GEP's pointer operand's buffer size is in range " << buf_size << "\n";
 
-    sym_range idx_range = compute_use_range(*gep.idx_begin());
+    sym_range idx_range = compute_use_range(*gep.idx_begin(), &gep);
     debug_out_ << "GEP's base index is in range " << idx_range << "\n";
 
     return check_overflow(buf_size, idx_range);

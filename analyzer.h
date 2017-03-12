@@ -34,15 +34,27 @@ private:
     void process_memory_access(llvm::Instruction const &, llvm::Value const &);
 
     sym_range compute_def_range(var_id const &);
-    sym_range compute_use_range(var_id const &, program_point_t = nullptr);
+    sym_range compute_use_range(var_id const &, program_point_t);
     void update_def_range(var_id const &);
-    sym_range refine_def_range(var_id, sym_range const &, program_point_t = nullptr);
 
     sym_range compute_def_range_const(llvm::Constant const &);
     sym_range compute_def_range_internal(llvm::Value const &);
     sym_range compute_buffer_size_range(llvm::Value const &);
     boost::tribool is_access_vulnerable(llvm::Value const &);
     boost::tribool is_access_vulnerable_gep(llvm::GetElementPtrInst const &);
+
+    sym_range refine_def_range(var_id, sym_range const &, program_point_t);
+    enum predicate_type {
+        PT_EQ,
+        PT_NE,
+    };
+    // The first argument is a variable for which we want to refine range.
+    // The second argument is symbolic range as it's known before call.
+    // The third, fourth and fifth arguments define predicate, `4th 3nd 5th`.
+    // So refine_def_range_internal(x, y, PT_EQ, a, b, p) refines range `y` of `x`
+    // taking into account that `a == b`.
+    // Last argument is a program point with predicate.
+    sym_range refine_def_range_internal(var_id, sym_range const &, predicate_type, var_id, var_id, program_point_t);
 
     void report_overflow(llvm::Instruction const &, bool sure = true);
     void report_potential_overflow(llvm::Instruction const &);
