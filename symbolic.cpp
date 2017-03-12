@@ -282,7 +282,7 @@ bool sym_expr::operator<=(sym_expr const & rhs) const
         return false;
 
     sym_expr diff = *this - rhs;
-    if (diff.coeff_ == 0 && diff.delta_ <= 0)
+    if (diff.coeff_ == 0 && delta_ <= rhs.delta_)
         return true;
 
     return false;

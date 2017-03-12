@@ -201,6 +201,18 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
     {
         return compute_use_range(sext->getOperand(0), sext);
     }
+    else if (auto type = v.getType())
+    {
+        if (type->isIntegerTy())
+        {
+            llvm::IntegerType * int_type = static_cast<llvm::IntegerType *>(type);
+            auto bits = int_type->getBitMask();
+            auto w = int_type->getBitWidth();
+            scalar_t max(bits >> 1);
+            scalar_t min(-max - 1);
+            return {sym_expr(min), sym_expr(max)};
+        }
+    }
 
     return var_sym_range(&v);
 }
