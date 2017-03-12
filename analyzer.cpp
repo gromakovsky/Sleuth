@@ -51,33 +51,55 @@ sym_range analyzer_t::compute_use_range(var_id const & v, void *)
 
 sym_range analyzer_t::compute_def_range(var_id const & v)
 {
-    if (auto const_v = dynamic_cast<llvm::Constant const *>(v))
-        return compute_def_range_const(*const_v);
-
     if (!v)
         return var_sym_range(v);
 
-    auto it = ctx_.val_ranges.find(v);
-    if (it != ctx_.val_ranges.end())
+    auto it = ctx_.def_ranges.find(v);
+    if (it != ctx_.def_ranges.end())
         return it->second;
 
+    if (auto const_v = dynamic_cast<llvm::Constant const *>(v))
+    {
+        auto res = compute_def_range_const(*const_v);
+        ctx_.def_ranges.emplace(v, res);
+        return res;
+    }
+
     ctx_.new_val_set.insert(v);
-    ctx_.val_ranges.emplace(v, sym_range::full);
+    ctx_.def_ranges.emplace(v, sym_range::full);
 
     auto range = compute_def_range_internal(*v);
-    ctx_.val_ranges.erase(v);
-    ctx_.val_ranges.emplace(v, std::move(range));
+    ctx_.def_ranges.erase(v);
+    ctx_.def_ranges.emplace(v, std::move(range));
 
     update_def_range(v);
     ctx_.new_val_set.erase(v);
 
-    auto res_it = ctx_.val_ranges.find(v);
-    return res_it == ctx_.val_ranges.end() ? sym_range::full : res_it->second;
+    auto res_it = ctx_.def_ranges.find(v);
+    return res_it == ctx_.def_ranges.end() ? sym_range::full : res_it->second;
 }
 
 void analyzer_t::update_def_range(var_id const & v)
 {
+    if (!v)
+        return;
 
+    for (var_id w : v->users())
+    {
+        if (!ctx_.new_val_set.count(w))
+            continue;
+
+        sym_range w_def_range = compute_def_range_internal(*w);
+        auto cached_iter = ctx_.def_ranges.find(w);
+        sym_range cached = cached_iter == ctx_.def_ranges.end() ? sym_range::full : cached_iter->second;
+        w_def_range &= cached;
+        if (w_def_range != cached)
+        {
+            ctx_.def_ranges.erase(w);
+            ctx_.def_ranges.emplace(w, w_def_range);
+            update_def_range(w);
+        }
+    }
 }
 
 sym_range analyzer_t::compute_def_range_const(llvm::Constant const & c)
