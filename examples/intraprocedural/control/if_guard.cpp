@@ -12,7 +12,9 @@ int main()
     int * p = new int[8];
     int x = f();
     if (x == 3)
-        p[x] = 8;
+        p[x] = 8;  // good
+
+    p[x] = 9;  // bad
 
     return 0;
 }
