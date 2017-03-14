@@ -47,6 +47,8 @@ private:
     enum predicate_type {
         PT_EQ,
         PT_NE,
+        PT_LT,
+        PT_LE,
     };
     // The first argument is a variable for which we want to refine range.
     // The second argument is symbolic range as it's known before call.

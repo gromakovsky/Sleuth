@@ -240,21 +240,58 @@ sym_range analyzer_t::refine_def_range(var_id v, sym_range const & def_range, pr
         bool is_true_succ = br->getSuccessor(0) == bb;
         if (auto cmp_inst = dynamic_cast<llvm::ICmpInst const *>(br->getCondition()))
         {
-            if (cmp_inst->getPredicate() == llvm::ICmpInst::ICMP_EQ)
+            auto refine = [this, v, &def_range, &cmp_inst](bool swap_args, analyzer_t::predicate_type pr_type)
             {
-                auto pr_type = is_true_succ ? PT_EQ : PT_NE;
                 return refine_def_range_internal(v, def_range, pr_type,
-                                                 cmp_inst->getOperand(0),
-                                                 cmp_inst->getOperand(1),
-                                                 cmp_inst);
-            }
-            if (cmp_inst->getPredicate() == llvm::ICmpInst::ICMP_NE)
+                                                 swap_args ? cmp_inst->getOperand(1) : cmp_inst->getOperand(0),
+                                                 swap_args ? cmp_inst->getOperand(0) : cmp_inst->getOperand(1),
+                                                 cmp_inst
+                                                 );
+            };
+
+            switch (cmp_inst->getPredicate())
             {
-                auto pr_type = is_true_succ ? PT_NE : PT_EQ;
-                return refine_def_range_internal(v, def_range, pr_type,
-                                                 cmp_inst->getOperand(0),
-                                                 cmp_inst->getOperand(1),
-                                                 cmp_inst);
+            case llvm::ICmpInst::ICMP_EQ:
+                {
+                    auto pr_type = is_true_succ ? PT_EQ : PT_NE;
+                    return refine(false, pr_type);
+                }
+            case llvm::ICmpInst::ICMP_NE:
+                {
+                    auto pr_type = is_true_succ ? PT_NE : PT_EQ;
+                    return refine(false, pr_type);
+                }
+            case llvm::ICmpInst::ICMP_UGT:
+            case llvm::ICmpInst::ICMP_SGT:
+                {
+                    auto pr_type = is_true_succ ? PT_LT : PT_LE;
+                    bool swap_args = is_true_succ;
+                    return refine(swap_args, pr_type);
+                }
+            case llvm::ICmpInst::ICMP_UGE:
+            case llvm::ICmpInst::ICMP_SGE:
+                {
+                    auto pr_type = is_true_succ ? PT_LE : PT_LT;
+                    bool swap_args = is_true_succ;
+                    return refine(swap_args, pr_type);
+                }
+            case llvm::ICmpInst::ICMP_ULT:
+            case llvm::ICmpInst::ICMP_SLT:
+                {
+                    auto pr_type = is_true_succ ? PT_LT : PT_LE;
+                    bool swap_args = !is_true_succ;
+                    return refine(swap_args, pr_type);
+                }
+            case llvm::ICmpInst::ICMP_ULE:
+            case llvm::ICmpInst::ICMP_SLE:
+                {
+                    auto pr_type = is_true_succ ? PT_LE : PT_LT;
+                    bool swap_args = !is_true_succ;
+                    return refine(swap_args, pr_type);
+                }
+            default:
+                {
+                }
             }
         }
     }
