@@ -18,6 +18,8 @@ add_definitions(${LLVM_DEFINITIONS})
 llvm_map_components_to_libnames(llvm_libs support core irreader analysis)
 
 # Add sources, link
-aux_source_directory(. SRC_LIST)
+file(GLOB_RECURSE SRC_LIST src/*.cpp src/*.h)
+
 add_executable(${PROJECT_NAME} ${SRC_LIST})
+target_include_directories(${PROJECT_NAME} PUBLIC src)
 target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES} ${llvm_libs})

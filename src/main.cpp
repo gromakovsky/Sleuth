@@ -3,7 +3,7 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 
-#include "analyzer.h"
+#include "analyzer/analyzer.h"
 
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
