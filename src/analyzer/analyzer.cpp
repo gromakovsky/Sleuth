@@ -112,11 +112,9 @@ sym_range analyzer_t::compute_def_range_const(llvm::Constant const & c)
         return var_sym_range(&c);
     }
 
-    if (auto i = dynamic_cast<llvm::ConstantInt const *>(&c))
+    if (auto scalar = extract_const_maybe(&c))
     {
-        llvm::APInt v = i->getValue();
-        scalar_t scalar = v.getLimitedValue();  // TODO: not the best solution obviously
-        sym_expr e(scalar);
+        sym_expr e(*scalar);
         return {e, e};
     }
 
@@ -447,3 +445,17 @@ void analyzer_t::analyze_module(llvm::Module const & module)
         analyze_function(f);
 }
 
+
+scalar_t extract_const(llvm::ConstantInt const & i)
+{
+    llvm::APInt v = i.getValue();
+    return v.getLimitedValue();  // TODO: not the best solution obviously
+}
+
+boost::optional<scalar_t> extract_const_maybe(llvm::Value const * v)
+{
+    if (auto i = dynamic_cast<llvm::ConstantInt const *>(v))
+        return extract_const(*i);
+
+    return boost::none;
+}

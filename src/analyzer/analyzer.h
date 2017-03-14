@@ -68,3 +68,7 @@ private:
     llvm::raw_ostream & warn_out_;
     llvm::raw_ostream & debug_out_;
 };
+
+scalar_t extract_const(llvm::ConstantInt const &);
+
+boost::optional<scalar_t> extract_const_maybe(llvm::Value const *);

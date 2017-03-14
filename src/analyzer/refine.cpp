@@ -28,6 +28,7 @@ sym_range analyzer_t::refine_def_range(var_id v, sym_range const & def_range, pr
     if (!pred)
         return def_range;
 
+    // TODO: improve predicates search
     llvm::TerminatorInst const * terminator = pred->getTerminator();
     if (auto br = dynamic_cast<llvm::BranchInst const *>(terminator))
     {
@@ -93,21 +94,88 @@ sym_range analyzer_t::refine_def_range(var_id v, sym_range const & def_range, pr
     return def_range;
 }
 
+
+struct match_res_t
+{
+    scalar_t coeff;
+    scalar_t delta;
+};
+
+// If v = c1 * to_match_with + c2, this function returns match_res_t(c1, c2).
+boost::optional<match_res_t> match_var(var_id v, var_id to_match_with)
+{
+    if (v == to_match_with)
+        return match_res_t({1, 0});
+
+    if (auto bin_op = dynamic_cast<llvm::BinaryOperator const *>(to_match_with))
+    {
+        var_id op0 = bin_op->getOperand(0), op1 = bin_op->getOperand(1);
+        if (op0 != v && op1 != v)
+            return boost::none;
+
+        bool v_is0 = op0 == v;
+        if (auto scalar = extract_const_maybe(v_is0 ? op1 : op0))
+        {
+            switch (bin_op->getOpcode())
+            {
+            case llvm::BinaryOperator::Add:
+                return match_res_t({1, -*scalar});
+            case llvm::BinaryOperator::Sub:
+                return v_is0
+                        ? match_res_t({1, *scalar})
+                        : match_res_t({-1, *scalar});
+            case llvm::BinaryOperator::SDiv:
+                if (v_is0)
+                    return match_res_t({*scalar, 0});
+            default: break;
+            }
+        }
+    }
+
+    if (auto bin_op = dynamic_cast<llvm::BinaryOperator const *>(v))
+    {
+        var_id op0 = bin_op->getOperand(0), op1 = bin_op->getOperand(1);
+        if (op0 != to_match_with && op1 != to_match_with)
+            return boost::none;
+
+        bool tmw_is0 = op0 == to_match_with;
+        if (auto scalar = extract_const_maybe(tmw_is0 ? op1 : op0))
+        {
+            switch (bin_op->getOpcode())
+            {
+            case llvm::BinaryOperator::Add:
+                return match_res_t({1, *scalar});
+            case llvm::BinaryOperator::Sub:
+                return tmw_is0
+                        ? match_res_t({1, -*scalar})
+                        : match_res_t({-1, *scalar}) ;
+            case llvm::BinaryOperator::Mul:
+                return match_res_t({*scalar, 0});
+            default: break;
+            }
+        }
+    }
+
+    return boost::none;
+}
+
 sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_range,
                                                 analyzer_t::predicate_type pt,
                                                 var_id a, var_id b, program_point_t point)
 {
     var_id op2 = nullptr;
-    if (v == a)
+    boost::optional<match_res_t> match_res;
+    if ((match_res = match_var(v, a)))
         op2 = b;
-    else if (v == b)
+    else if ((match_res = match_var(v, b)))
         op2 = a;
 
-    if (!op2)
+    if (!op2 || !match_res)
         return def_range;
 
     sym_range op2_range = compute_use_range(op2, point);
 
+    // TODO: consider match_res
     if (pt == PT_NE)
     {
         if (op2_range.lo == op2_range.hi)
@@ -135,14 +203,18 @@ sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_
         return def_range;
     }
 
+    sym_expr coeff_expr(match_res->coeff);
+    sym_expr delta_expr(match_res->delta);
     sym_range to_intersect = sym_range::full;
     switch (pt)
     {
     case PT_EQ:
     {
-        to_intersect = compute_use_range(op2, point);
+        to_intersect = coeff_expr * compute_use_range(op2, point) +
+                sym_range({delta_expr, delta_expr});
         break;
     }
+    // TODO: consider match_res
     case PT_LT:
     {
         if (v == a)
@@ -151,6 +223,7 @@ sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_
             to_intersect = {op2_range.lo + sym_expr(scalar_t(1)), sym_expr::top};
         break;
     }
+    // TODO: consider match_res
     case PT_LE:
     {
         if (v == a)
