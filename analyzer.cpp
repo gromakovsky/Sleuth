@@ -303,21 +303,77 @@ sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_
                                                 analyzer_t::predicate_type pt,
                                                 var_id a, var_id b, program_point_t point)
 {
-    if (pt == PT_NE)
-        return def_range; // TODO
-
-    boost::optional<sym_range> to_intersect;
+    var_id op2 = nullptr;
     if (v == a)
-        to_intersect = compute_use_range(b, point);
+        op2 = b;
     else if (v == b)
-        to_intersect = compute_use_range(a, point);
+        op2 = a;
 
-    if (to_intersect)
+    if (!op2)
+        return def_range;
+
+    sym_range op2_range = compute_use_range(op2, point);
+
+    if (pt == PT_NE)
     {
-        llvm::outs() << "control dependency leads to intersection with " << *to_intersect << "\n";
-        return def_range & *to_intersect;
+        if (op2_range.lo == op2_range.hi)
+        {
+            if (auto scalar = op2_range.lo.to_scalar())
+            {
+                if (auto lo_scalar = def_range.lo.to_scalar())
+                {
+                    if (*lo_scalar == *scalar)
+                    {
+                        return {sym_expr(*lo_scalar + 1), def_range.hi};
+                    }
+                }
+
+                if (auto hi_scalar = def_range.hi.to_scalar())
+                {
+                    if (*hi_scalar == *scalar)
+                    {
+                        return {def_range.lo, sym_expr(*hi_scalar - 1)};
+                    }
+                }
+            }
+        }
+
+        return def_range;
     }
-    return def_range;
+
+    sym_range to_intersect = sym_range::full;
+    switch (pt)
+    {
+    case PT_EQ:
+    {
+        to_intersect = compute_use_range(op2, point);
+        break;
+    }
+    case PT_LT:
+    {
+        if (v == a)
+            to_intersect = {sym_expr::bot, op2_range.hi - sym_expr(scalar_t(1))};
+        else
+            to_intersect = {op2_range.lo + sym_expr(scalar_t(1)), sym_expr::top};
+        break;
+    }
+    case PT_LE:
+    {
+        if (v == a)
+            to_intersect = {sym_expr::bot, op2_range.hi};
+        else
+            to_intersect = {op2_range.lo, sym_expr::top};
+        break;
+    }
+    case PT_NE:
+    {
+        // can't happen
+        break;
+    }
+    }
+
+    llvm::outs() << "control dependency leads to intersection with " << to_intersect << "\n";
+    return def_range & to_intersect;
 }
 
 /* ------------------------------------------------
