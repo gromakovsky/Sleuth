@@ -175,16 +175,16 @@ sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_
 
     sym_range op2_range = compute_use_range(op2, point);
 
-    // TODO: consider match_res
     if (pt == PT_NE)
     {
         if (op2_range.lo == op2_range.hi)
         {
             if (auto scalar = op2_range.lo.to_scalar())
             {
+                scalar_t transformed_scalar = match_res->coeff * *scalar + match_res->delta;
                 if (auto lo_scalar = def_range.lo.to_scalar())
                 {
-                    if (*lo_scalar == *scalar)
+                    if (*lo_scalar == transformed_scalar)
                     {
                         return {sym_expr(*lo_scalar + 1), def_range.hi};
                     }
@@ -192,7 +192,7 @@ sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_
 
                 if (auto hi_scalar = def_range.hi.to_scalar())
                 {
-                    if (*hi_scalar == *scalar)
+                    if (*hi_scalar == transformed_scalar)
                     {
                         return {def_range.lo, sym_expr(*hi_scalar - 1)};
                     }
@@ -214,22 +214,23 @@ sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_
                 sym_range({delta_expr, delta_expr});
         break;
     }
-    // TODO: consider match_res
     case PT_LT:
     {
-        if (v == a)
-            to_intersect = {sym_expr::bot, op2_range.hi - sym_expr(scalar_t(1))};
+        if (op2 == b ^ match_res->coeff < 0)
+            to_intersect = {sym_expr::bot, coeff_expr * op2_range.hi + delta_expr - sym_expr(scalar_t(1))};
         else
-            to_intersect = {op2_range.lo + sym_expr(scalar_t(1)), sym_expr::top};
+            to_intersect = {coeff_expr * op2_range.lo + delta_expr + sym_expr(scalar_t(1)), sym_expr::top};
         break;
     }
-    // TODO: consider match_res
     case PT_LE:
     {
-        if (v == a)
-            to_intersect = {sym_expr::bot, op2_range.hi};
+        // op2 == b ⇒ v = c1 * a + c2
+        // if (op2 == b && match_res->coeff >= 0) then
+        //     v ≤ c1 * op2 + c2
+        if (op2 == b ^ match_res->coeff < 0)
+            to_intersect = {sym_expr::bot, coeff_expr * op2_range.hi + delta_expr};
         else
-            to_intersect = {op2_range.lo, sym_expr::top};
+            to_intersect = {coeff_expr * op2_range.lo + delta_expr, sym_expr::top};
         break;
     }
     case PT_NE:
