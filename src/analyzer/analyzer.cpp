@@ -448,8 +448,17 @@ void analyzer_t::analyze_module(llvm::Module const & module)
 
 scalar_t extract_const(llvm::ConstantInt const & i)
 {
+    // TODO: not the best solution obviously
     llvm::APInt v = i.getValue();
-    return v.getLimitedValue();  // TODO: not the best solution obviously
+    bool is_neg = v.isNegative();
+    if (is_neg)
+        v.flipAllBits();
+
+    scalar_t res = v.getLimitedValue();
+    if (is_neg)
+        res = -res - 1;
+
+    return res;
 }
 
 boost::optional<scalar_t> extract_const_maybe(llvm::Value const * v)
