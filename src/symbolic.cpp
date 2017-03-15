@@ -296,7 +296,14 @@ bool sym_expr::operator==(sym_expr const & rhs) const
     if (!bl::indeterminate(rhs.is_special_))
         return false;
 
-    return delta_ == rhs.delta_ && coeff_ == rhs.coeff_ && *atom_ == *rhs.atom_;
+    if (delta_ != rhs.delta_ || coeff_ != rhs.coeff_)
+        return false;
+    if (!atom_ && !rhs.atom_)
+        return true;
+    if (!!atom_ ^ !!rhs.atom_)
+        return false;
+
+    return *atom_ == *rhs.atom_;
 }
 
 bool sym_expr::operator!=(sym_expr const & rhs) const
