@@ -37,11 +37,13 @@ sym_range analyzer_t::refine_def_range(var_id v, sym_range const & def_range, pr
         {
             auto refine = [this, v, &def_range, &cmp_inst](bool swap_args, analyzer_t::predicate_type pr_type)
             {
-                return refine_def_range_internal(v, def_range, pr_type,
-                                                 swap_args ? cmp_inst->getOperand(1) : cmp_inst->getOperand(0),
-                                                 swap_args ? cmp_inst->getOperand(0) : cmp_inst->getOperand(1),
-                                                 cmp_inst
-                                                 );
+                predicate_t pred = {pr_type,
+                                    swap_args ? cmp_inst->getOperand(1)
+                                              : cmp_inst->getOperand(0),
+                                    swap_args ? cmp_inst->getOperand(0)
+                                              : cmp_inst->getOperand(1),
+                                    cmp_inst};
+                return refine_def_range_internal(v, def_range, pred);
             };
 
             switch (cmp_inst->getPredicate())
@@ -160,22 +162,22 @@ boost::optional<match_res_t> match_var(var_id v, var_id to_match_with)
 }
 
 sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_range,
-                                                analyzer_t::predicate_type pt,
-                                                var_id a, var_id b, program_point_t point)
+                                                analyzer_t::predicate_t const & pred)
 {
+    // a = lhs, b = rhs
     var_id op2 = nullptr;
     boost::optional<match_res_t> match_res;
-    if ((match_res = match_var(v, a)))
-        op2 = b;
-    else if ((match_res = match_var(v, b)))
-        op2 = a;
+    if ((match_res = match_var(v, pred.lhs)))
+        op2 = pred.rhs;
+    else if ((match_res = match_var(v, pred.rhs)))
+        op2 = pred.lhs;
 
     if (!op2 || !match_res)
         return def_range;
 
-    sym_range op2_range = compute_use_range(op2, point);
+    sym_range op2_range = compute_use_range(op2, pred.program_point);
 
-    if (pt == PT_NE)
+    if (pred.type == PT_NE)
     {
         if (op2_range.lo == op2_range.hi)
         {
@@ -206,17 +208,16 @@ sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_
     sym_expr coeff_expr(match_res->coeff);
     sym_expr delta_expr(match_res->delta);
     sym_range to_intersect = sym_range::full;
-    switch (pt)
+    switch (pred.type)
     {
     case PT_EQ:
     {
-        to_intersect = coeff_expr * compute_use_range(op2, point) +
-                sym_range({delta_expr, delta_expr});
+        to_intersect = coeff_expr * op2_range + sym_range({delta_expr, delta_expr});
         break;
     }
     case PT_LT:
     {
-        if (op2 == b ^ match_res->coeff < 0)
+        if ((op2 == pred.rhs) ^ (match_res->coeff < 0))
             to_intersect = {sym_expr::bot, coeff_expr * op2_range.hi + delta_expr - sym_expr(scalar_t(1))};
         else
             to_intersect = {coeff_expr * op2_range.lo + delta_expr + sym_expr(scalar_t(1)), sym_expr::top};
@@ -227,7 +228,7 @@ sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_
         // op2 == b ⇒ v = c1 * a + c2
         // if (op2 == b && match_res->coeff >= 0) then
         //     v ≤ c1 * op2 + c2
-        if (op2 == b ^ match_res->coeff < 0)
+        if ((op2 == pred.rhs) ^ (match_res->coeff < 0))
             to_intersect = {sym_expr::bot, coeff_expr * op2_range.hi + delta_expr};
         else
             to_intersect = {coeff_expr * op2_range.lo + delta_expr, sym_expr::top};

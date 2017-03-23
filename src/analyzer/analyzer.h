@@ -50,13 +50,21 @@ private:
         PT_LT,
         PT_LE,
     };
+
+    struct predicate_t
+    {
+        predicate_type type;
+        var_id lhs;
+        var_id rhs;
+        program_point_t program_point;
+    };
+
     // The first argument is a variable for which we want to refine range.
     // The second argument is symbolic range as it's known before call.
-    // The third, fourth and fifth arguments define predicate, `4th 3nd 5th`.
-    // So refine_def_range_internal(x, y, PT_EQ, a, b, p) refines range `y` of `x`
-    // taking into account that `a == b`.
-    // Last argument is a program point with predicate.
-    sym_range refine_def_range_internal(var_id, sym_range const &, predicate_type, var_id, var_id, program_point_t);
+    // The third argument is a full representation of a predicate.
+    // So refine_def_range_internal(x, y, {PT_EQ, a, b, p}) refines range `y` of `x`
+    // taking into account that `a == b` at point `p`.
+    sym_range refine_def_range_internal(var_id, sym_range const &, predicate_t const &);
 
     void report_overflow(llvm::Instruction const &, bool sure = true);
     void report_potential_overflow(llvm::Instruction const &);
