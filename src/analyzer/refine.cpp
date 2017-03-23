@@ -1,5 +1,7 @@
 #include "analyzer.h"
 
+#include <iterator>
+
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Pass.h>
 #include <llvm/Analysis/MemoryBuiltins.h>
@@ -15,27 +17,23 @@
  * ------------------------------------------------
  */
 
-sym_range analyzer_t::refine_def_range(var_id v, sym_range const & def_range, program_point_t p)
+analyzer_t::predicates_t analyzer_t::collect_predicates(llvm::BasicBlock const * bb)
 {
-    if (!p)
-        return def_range;
-
-    llvm::BasicBlock const * bb = p->getParent();
     if (!bb)
-        return def_range;
+        return {};
 
-    llvm::BasicBlock const * pred = bb->getSinglePredecessor();
-    if (!pred)
-        return def_range;
+    llvm::BasicBlock const * predecessor = bb->getSinglePredecessor();
+    if (!predecessor)
+        return {};
 
-    // TODO: improve predicates search
-    llvm::TerminatorInst const * terminator = pred->getTerminator();
+    predicates_t predicates;
+    llvm::TerminatorInst const * terminator = predecessor->getTerminator();
     if (auto br = dynamic_cast<llvm::BranchInst const *>(terminator))
     {
         bool is_true_succ = br->getSuccessor(0) == bb;
         if (auto cmp_inst = dynamic_cast<llvm::ICmpInst const *>(br->getCondition()))
         {
-            auto refine = [this, v, &def_range, &cmp_inst](bool swap_args, analyzer_t::predicate_type pr_type)
+            auto add_pred = [&predicates, cmp_inst](bool swap_args, predicate_type pr_type)
             {
                 predicate_t pred = {pr_type,
                                     swap_args ? cmp_inst->getOperand(1)
@@ -43,7 +41,7 @@ sym_range analyzer_t::refine_def_range(var_id v, sym_range const & def_range, pr
                                     swap_args ? cmp_inst->getOperand(0)
                                               : cmp_inst->getOperand(1),
                                     cmp_inst};
-                return refine_def_range_internal(v, def_range, pred);
+                predicates.push_back(pred);
             };
 
             switch (cmp_inst->getPredicate())
@@ -51,40 +49,46 @@ sym_range analyzer_t::refine_def_range(var_id v, sym_range const & def_range, pr
             case llvm::ICmpInst::ICMP_EQ:
                 {
                     auto pr_type = is_true_succ ? PT_EQ : PT_NE;
-                    return refine(false, pr_type);
+                    add_pred(false, pr_type);
+                    break;
                 }
             case llvm::ICmpInst::ICMP_NE:
                 {
                     auto pr_type = is_true_succ ? PT_NE : PT_EQ;
-                    return refine(false, pr_type);
+                    add_pred(false, pr_type);
+                    break;
                 }
             case llvm::ICmpInst::ICMP_UGT:
             case llvm::ICmpInst::ICMP_SGT:
                 {
                     auto pr_type = is_true_succ ? PT_LT : PT_LE;
                     bool swap_args = is_true_succ;
-                    return refine(swap_args, pr_type);
+                    add_pred(swap_args, pr_type);
+                    break;
                 }
             case llvm::ICmpInst::ICMP_UGE:
             case llvm::ICmpInst::ICMP_SGE:
                 {
                     auto pr_type = is_true_succ ? PT_LE : PT_LT;
                     bool swap_args = is_true_succ;
-                    return refine(swap_args, pr_type);
+                    add_pred(swap_args, pr_type);
+                    break;
                 }
             case llvm::ICmpInst::ICMP_ULT:
             case llvm::ICmpInst::ICMP_SLT:
                 {
                     auto pr_type = is_true_succ ? PT_LT : PT_LE;
                     bool swap_args = !is_true_succ;
-                    return refine(swap_args, pr_type);
+                    add_pred(swap_args, pr_type);
+                    break;
                 }
             case llvm::ICmpInst::ICMP_ULE:
             case llvm::ICmpInst::ICMP_SLE:
                 {
                     auto pr_type = is_true_succ ? PT_LE : PT_LT;
                     bool swap_args = !is_true_succ;
-                    return refine(swap_args, pr_type);
+                    add_pred(swap_args, pr_type);
+                    break;
                 }
             default:
                 {
@@ -92,6 +96,22 @@ sym_range analyzer_t::refine_def_range(var_id v, sym_range const & def_range, pr
             }
         }
     }
+
+    predicates_t res = collect_predicates(predecessor);
+    std::copy(predicates.begin(), predicates.end(), std::back_inserter(res));
+
+    return res;
+}
+
+sym_range analyzer_t::refine_def_range(var_id v, sym_range def_range, program_point_t p)
+{
+    if (!p)
+        return def_range;
+
+    llvm::BasicBlock const * bb = p->getParent();
+    predicates_t predicates = collect_predicates(bb);
+    for (predicate_t const & predicate : predicates)
+        def_range = refine_def_range_internal(v, def_range, predicate);
 
     return def_range;
 }

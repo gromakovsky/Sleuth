@@ -47,7 +47,7 @@ tribool check_overflow(sym_range const & size_range, sym_range const & idx_range
 sym_range analyzer_t::compute_use_range(var_id const & v, program_point_t p)
 {
     sym_range r = compute_def_range(v);
-    return refine_def_range(v, r, p);
+    return refine_def_range(v, std::move(r), p);
 }
 
 sym_range analyzer_t::compute_def_range(var_id const & v)

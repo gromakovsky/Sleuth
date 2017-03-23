@@ -43,7 +43,7 @@ private:
     boost::tribool is_access_vulnerable(llvm::Value const &);
     boost::tribool is_access_vulnerable_gep(llvm::GetElementPtrInst const &);
 
-    sym_range refine_def_range(var_id, sym_range const &, program_point_t);
+    sym_range refine_def_range(var_id, sym_range, program_point_t);
     enum predicate_type {
         PT_EQ,
         PT_NE,
@@ -58,6 +58,10 @@ private:
         var_id rhs;
         program_point_t program_point;
     };
+
+    using predicates_t = std::vector<analyzer_t::predicate_t>;
+
+    predicates_t collect_predicates(llvm::BasicBlock const *);
 
     // The first argument is a variable for which we want to refine range.
     // The second argument is symbolic range as it's known before call.
