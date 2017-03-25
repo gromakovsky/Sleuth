@@ -6,6 +6,7 @@
 #include <boost/logic/tribool.hpp>
 
 #include <llvm/Analysis/TargetLibraryInfo.h>
+#include <llvm/IR/Dominators.h>
 
 #include "common.h"
 #include "symbolic.h"
@@ -18,4 +19,5 @@ struct context_t
     new_val_set_t new_val_set;
     std::unordered_map<var_id, boost::tribool> vulnerability_info;
     llvm::TargetLibraryInfoWrapperPass tliwp;
+    llvm::DominatorTreeWrapperPass dtwp;
 };

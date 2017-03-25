@@ -6,6 +6,7 @@
 #include <llvm/Pass.h>
 #include <llvm/Analysis/MemoryBuiltins.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
+#include <llvm/Analysis/CFG.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -26,81 +27,109 @@ analyzer_t::predicates_t analyzer_t::collect_predicates(llvm::BasicBlock const *
     if (!predecessor)
         return {};
 
-    predicates_t predicates;
-    llvm::TerminatorInst const * terminator = predecessor->getTerminator();
-    if (auto br = dynamic_cast<llvm::BranchInst const *>(terminator))
-    {
-        bool is_true_succ = br->getSuccessor(0) == bb;
-        if (auto cmp_inst = dynamic_cast<llvm::ICmpInst const *>(br->getCondition()))
-        {
-            auto add_pred = [&predicates, cmp_inst](bool swap_args, predicate_type pr_type)
-            {
-                predicate_t pred = {pr_type,
-                                    swap_args ? cmp_inst->getOperand(1)
-                                              : cmp_inst->getOperand(0),
-                                    swap_args ? cmp_inst->getOperand(0)
-                                              : cmp_inst->getOperand(1),
-                                    cmp_inst};
-                predicates.push_back(pred);
-            };
+    llvm::Function const * func = bb->getParent();
+    if (!func)
+        return {};
 
-            switch (cmp_inst->getPredicate())
+    ctx_.dtwp.runOnFunction(*const_cast<llvm::Function *>(func));
+
+    llvm::DominatorTree const & dom_tree = ctx_.dtwp.getDomTree();
+    std::vector<llvm::BasicBlock const *> dominators;
+    for (auto const & another_bb : *func)
+    {
+        if (dom_tree.properlyDominates(&another_bb, bb))
+            dominators.push_back(&another_bb);
+    }
+
+    predicates_t predicates;
+    for (llvm::BasicBlock const * dominator : dominators)
+    {
+        llvm::TerminatorInst const * terminator = dominator->getTerminator();
+        if (auto br = dynamic_cast<llvm::BranchInst const *>(terminator))
+        {
+            if (br->isUnconditional())
+                continue;
+
+            llvm::BasicBlock const * true_bb = br->getSuccessor(0);
+            llvm::BasicBlock const * false_bb = br->getSuccessor(1);
+            bool reachable_from_true = llvm::isPotentiallyReachable(true_bb, bb, &dom_tree);
+            bool reachable_from_false = llvm::isPotentiallyReachable(false_bb, bb, &dom_tree);
+            bool is_true_succ;
+            if (reachable_from_false && !reachable_from_true)
+                is_true_succ = false;
+            else if (reachable_from_true && !reachable_from_false)
+                is_true_succ = true;
+            else
+                continue;
+
+            if (auto cmp_inst = dynamic_cast<llvm::ICmpInst const *>(br->getCondition()))
             {
-            case llvm::ICmpInst::ICMP_EQ:
+                auto add_pred = [&predicates, cmp_inst](bool swap_args, predicate_type pr_type)
                 {
-                    auto pr_type = is_true_succ ? PT_EQ : PT_NE;
-                    add_pred(false, pr_type);
-                    break;
-                }
-            case llvm::ICmpInst::ICMP_NE:
+                    predicate_t pred = {pr_type,
+                                        swap_args ? cmp_inst->getOperand(1)
+                                                  : cmp_inst->getOperand(0),
+                                        swap_args ? cmp_inst->getOperand(0)
+                                                  : cmp_inst->getOperand(1),
+                                        cmp_inst};
+                    predicates.push_back(pred);
+                };
+
+                switch (cmp_inst->getPredicate())
                 {
-                    auto pr_type = is_true_succ ? PT_NE : PT_EQ;
-                    add_pred(false, pr_type);
-                    break;
-                }
-            case llvm::ICmpInst::ICMP_UGT:
-            case llvm::ICmpInst::ICMP_SGT:
-                {
-                    auto pr_type = is_true_succ ? PT_LT : PT_LE;
-                    bool swap_args = is_true_succ;
-                    add_pred(swap_args, pr_type);
-                    break;
-                }
-            case llvm::ICmpInst::ICMP_UGE:
-            case llvm::ICmpInst::ICMP_SGE:
-                {
-                    auto pr_type = is_true_succ ? PT_LE : PT_LT;
-                    bool swap_args = is_true_succ;
-                    add_pred(swap_args, pr_type);
-                    break;
-                }
-            case llvm::ICmpInst::ICMP_ULT:
-            case llvm::ICmpInst::ICMP_SLT:
-                {
-                    auto pr_type = is_true_succ ? PT_LT : PT_LE;
-                    bool swap_args = !is_true_succ;
-                    add_pred(swap_args, pr_type);
-                    break;
-                }
-            case llvm::ICmpInst::ICMP_ULE:
-            case llvm::ICmpInst::ICMP_SLE:
-                {
-                    auto pr_type = is_true_succ ? PT_LE : PT_LT;
-                    bool swap_args = !is_true_succ;
-                    add_pred(swap_args, pr_type);
-                    break;
-                }
-            default:
-                {
+                case llvm::ICmpInst::ICMP_EQ:
+                    {
+                        auto pr_type = is_true_succ ? PT_EQ : PT_NE;
+                        add_pred(false, pr_type);
+                        break;
+                    }
+                case llvm::ICmpInst::ICMP_NE:
+                    {
+                        auto pr_type = is_true_succ ? PT_NE : PT_EQ;
+                        add_pred(false, pr_type);
+                        break;
+                    }
+                case llvm::ICmpInst::ICMP_UGT:
+                case llvm::ICmpInst::ICMP_SGT:
+                    {
+                        auto pr_type = is_true_succ ? PT_LT : PT_LE;
+                        bool swap_args = is_true_succ;
+                        add_pred(swap_args, pr_type);
+                        break;
+                    }
+                case llvm::ICmpInst::ICMP_UGE:
+                case llvm::ICmpInst::ICMP_SGE:
+                    {
+                        auto pr_type = is_true_succ ? PT_LE : PT_LT;
+                        bool swap_args = is_true_succ;
+                        add_pred(swap_args, pr_type);
+                        break;
+                    }
+                case llvm::ICmpInst::ICMP_ULT:
+                case llvm::ICmpInst::ICMP_SLT:
+                    {
+                        auto pr_type = is_true_succ ? PT_LT : PT_LE;
+                        bool swap_args = !is_true_succ;
+                        add_pred(swap_args, pr_type);
+                        break;
+                    }
+                case llvm::ICmpInst::ICMP_ULE:
+                case llvm::ICmpInst::ICMP_SLE:
+                    {
+                        auto pr_type = is_true_succ ? PT_LE : PT_LT;
+                        bool swap_args = !is_true_succ;
+                        add_pred(swap_args, pr_type);
+                        break;
+                    }
+                default:
+                    {
+                    }
                 }
             }
         }
     }
 
-    predicates_t res = collect_predicates(predecessor);
-    std::copy(predicates.begin(), predicates.end(), std::back_inserter(res));
-
-    return res;
+    return predicates;
 }
 
 sym_range analyzer_t::refine_def_range(var_id v, sym_range def_range, program_point_t p)
