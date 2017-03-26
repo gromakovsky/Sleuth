@@ -23,10 +23,6 @@ analyzer_t::predicates_t analyzer_t::collect_predicates(llvm::BasicBlock const *
     if (!bb)
         return {};
 
-    llvm::BasicBlock const * predecessor = bb->getSinglePredecessor();
-    if (!predecessor)
-        return {};
-
     llvm::Function const * func = bb->getParent();
     if (!func)
         return {};
