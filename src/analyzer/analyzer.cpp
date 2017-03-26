@@ -199,6 +199,11 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
     {
         return compute_use_range(sext->getOperand(0), sext);
     }
+    else if (auto sext = dynamic_cast<llvm::ZExtInst const *>(&v))
+    {
+        // TODO: not the best solution
+        return compute_use_range(sext->getOperand(0), sext);
+    }
     else if (auto type = v.getType())
     {
         if (type->isIntegerTy())
