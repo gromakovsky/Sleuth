@@ -1,13 +1,9 @@
-// Example from the paper (slightly modified in irrelevant places)
+// Example from the paper, only accesses within loop
 
 #include <cstring>
 #include <cstdlib>
 
-int external_function()
-{
-    int n;
-    return n;
-}
+int external_function();
 
 char * tosunds_str(char * str)
 {
@@ -18,15 +14,12 @@ char * tosunds_str(char * str)
     j = 0;
     for (i = 0; i < strlen(str); i++)
     {
-        if (str[i] == 10)
-            buf[j++] = '%';
+        if (str[i] == 10)  // potential overflow, because size of str is unknown
+            buf[j++] = '%'; // good
 
-        buf[j++] = str[i];
+        buf[j++] = str[i]; // buf[j++] is bad, str[i] is potential overflow
         if (j >= n) break;
     }
-    if (j + 1 >= n)
-        j = n - 1;
 
-    buf[j] = '\0';
     return buf;
 }
