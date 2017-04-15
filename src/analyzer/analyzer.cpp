@@ -148,6 +148,36 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
         for (var_id inc_v : phi->incoming_values())
             r |= compute_use_range(inc_v, phi);
 
+        if (phi->getNumIncomingValues() == 2)
+        {
+            var_id inc_v0 = phi->getIncomingValue(0);
+            var_id inc_v1 = phi->getIncomingValue(1);
+
+            auto test_value = [&r, phi, this](var_id dependent, var_id another)
+            {
+                switch (does_monotonically_depend(dependent, phi))
+                {
+                case MONOTONY_INC:
+                {
+                    predicate_t predicate = {PT_LE, another, phi, phi};
+                    r = refine_def_range_internal(phi, r, predicate);
+                    break;
+                }
+                case MONOTONY_DEC:
+                {
+                    predicate_t predicate = {PT_LE, phi, another, phi};
+                    r = refine_def_range_internal(phi, r, predicate);
+                    break;
+                }
+                default:
+                    break;
+                }
+            };
+
+            test_value(inc_v0, inc_v1);
+            test_value(inc_v1, inc_v0);
+        }
+
         return r;
     }
     else if (auto load = dynamic_cast<llvm::LoadInst const *>(&v))
@@ -468,28 +498,4 @@ void analyzer_t::analyze_module(llvm::Module const & module)
 
     for (auto const & f : module)
         analyze_function(f);
-}
-
-
-scalar_t extract_const(llvm::ConstantInt const & i)
-{
-    // TODO: not the best solution obviously
-    llvm::APInt v = i.getValue();
-    bool is_neg = v.isNegative();
-    if (is_neg)
-        v.flipAllBits();
-
-    scalar_t res = v.getLimitedValue();
-    if (is_neg)
-        res = -res - 1;
-
-    return res;
-}
-
-boost::optional<scalar_t> extract_const_maybe(llvm::Value const * v)
-{
-    if (auto i = dynamic_cast<llvm::ConstantInt const *>(v))
-        return extract_const(*i);
-
-    return boost::none;
 }

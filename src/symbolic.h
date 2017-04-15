@@ -10,7 +10,6 @@
 #include "common.h"
 
 using boost::logic::tribool;
-using scalar_t = std::int64_t;
 
 struct sym_atomic
 {

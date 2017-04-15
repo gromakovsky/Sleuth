@@ -86,7 +86,3 @@ private:
     unsigned total_indeterminate_;
     unsigned total_correct_;
 };
-
-scalar_t extract_const(llvm::ConstantInt const &);
-
-boost::optional<scalar_t> extract_const_maybe(llvm::Value const *);
