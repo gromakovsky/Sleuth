@@ -27,6 +27,12 @@ analyzer_t::predicates_t analyzer_t::collect_predicates(llvm::BasicBlock const *
     if (!func)
         return {};
 
+    // Currently it works as follows:
+    // 1. Iterate through all blocks within function and collect dominators.
+    // 2. Iterate through all dominators and examine reachability from successors.
+    //
+    // Probably it can be optimized.
+
     ctx_.dtwp.runOnFunction(*const_cast<llvm::Function *>(func));
 
     llvm::DominatorTree const & dom_tree = ctx_.dtwp.getDomTree();
