@@ -7,6 +7,7 @@
 #include <llvm/Analysis/MemoryBuiltins.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/CFG.h>
+#include <llvm/IR/CFG.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -17,6 +18,52 @@
  * Control dependencies
  * ------------------------------------------------
  */
+
+// Custom version of 'llvm::isPotentiallyReachable'.
+// It takes three basic blocks: source, destination and checkpoint.
+// It works like 'llvm::isPotentiallyReachable' but ignores edges from
+// checkpoint to destination.
+//
+// It's mostly copy-pasted from llvm sources.
+bool is_potentially_reachable_custom(llvm::BasicBlock const * source, llvm::BasicBlock const * dest,
+                                     llvm::BasicBlock const * checkpoint, llvm::DominatorTree const & DT)
+{
+    llvm::SmallVector<llvm::BasicBlock const *, 32> worklist;
+    worklist.push_back(source);
+
+    // When the stop block is unreachable, it's dominated from everywhere,
+    // regardless of whether there's a path between the two blocks.
+    if (!DT.isReachableFromEntry(dest))
+      return false;
+
+    // Limit the number of blocks we visit. The goal is to avoid run-away compile
+    // times on large CFGs without hampering sensible code. Arbitrarily chosen.
+    unsigned Limit = 32;
+    llvm::SmallPtrSet<llvm::BasicBlock const *, 32> visited;
+    do {
+      llvm::BasicBlock const * BB = worklist.pop_back_val();
+      if (!visited.insert(BB).second)
+        continue;
+      if (BB == dest)
+        return true;
+//      if (DT.dominates(BB, dest))
+//        return true;
+
+      if (!--Limit) {
+        // We haven't been able to prove it one way or the other. Conservatively
+        // answer true -- that there is potentially a path.
+        return true;
+      }
+
+      if (BB != checkpoint)
+        worklist.append(llvm::succ_begin(BB), llvm::succ_end(BB));
+
+    } while (!worklist.empty());
+
+    // We have exhausted all possible paths and are certain that 'To' can not be
+    // reached from 'From'.
+    return false;
+}
 
 analyzer_t::predicates_t analyzer_t::collect_predicates(llvm::BasicBlock const * bb)
 {
@@ -54,8 +101,12 @@ analyzer_t::predicates_t analyzer_t::collect_predicates(llvm::BasicBlock const *
 
             llvm::BasicBlock const * true_bb = br->getSuccessor(0);
             llvm::BasicBlock const * false_bb = br->getSuccessor(1);
-            bool reachable_from_true = llvm::isPotentiallyReachable(true_bb, bb, &dom_tree);
-            bool reachable_from_false = llvm::isPotentiallyReachable(false_bb, bb, &dom_tree);
+            bool reachable_from_true = is_potentially_reachable_custom(true_bb, bb, dominator, dom_tree);
+            bool reachable_from_false = is_potentially_reachable_custom(false_bb, bb, dominator, dom_tree);
+//            debug_out_ << "dominator: " << *dominator->getTerminator()
+//                       << ", reachable from true: " << reachable_from_true
+//                       << ", reachable from false: " << reachable_from_false
+//                       << "\n";
             bool is_true_succ;
             if (reachable_from_false && !reachable_from_true)
                 is_true_succ = false;
