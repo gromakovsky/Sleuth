@@ -286,6 +286,6 @@ sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_
     }
     }
 
-    llvm::outs() << "control dependency leads to intersection with " << to_intersect << "\n";
+    debug_out_ << "control dependency leads to intersection with " << to_intersect << "\n";
     return def_range & to_intersect;
 }

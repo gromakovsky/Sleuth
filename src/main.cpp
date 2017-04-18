@@ -10,11 +10,12 @@ namespace fs = boost::filesystem;
 
 int main(int argc, char *argv[])
 {
-    bool verbose;
+    bool verbose, print_indeterminate;
     po::options_description visible_options("Options");
     visible_options.add_options()
        ("help",                                                            "display this help")
        ("verbose,v",                 po::value(&verbose)->zero_tokens(),   "be verbose")
+       ("indeterminate,n",           po::value(&verbose)->zero_tokens(),   "report indeterminate situations")
        ;
 
     po::options_description hidden_options("Hidden options");
@@ -53,7 +54,7 @@ int main(int argc, char *argv[])
     }
 
     fs::path input_path(vm["input"].as<std::string>());
-    analyzer_t analyzer(true, llvm::outs());
+    analyzer_t analyzer(print_indeterminate, llvm::outs(), llvm::errs(), verbose ? llvm::outs() : llvm::nulls());
     analyzer.analyze_file(input_path);
 
     return 0;
