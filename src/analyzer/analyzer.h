@@ -41,8 +41,8 @@ private:
     sym_range compute_def_range_const(llvm::Constant const &);
     sym_range compute_def_range_internal(llvm::Value const &);
     sym_range compute_buffer_size_range(llvm::Value const &);
-    boost::tribool is_access_vulnerable(llvm::Value const &);
-    boost::tribool is_access_vulnerable_gep(llvm::GetElementPtrInst const &);
+    vulnerability_info_t is_access_vulnerable(llvm::Value const &);
+    vulnerability_info_t is_access_vulnerable_gep(llvm::GetElementPtrInst const &);
 
     sym_range refine_def_range(var_id, sym_range, program_point_t);
     enum predicate_type {
@@ -71,8 +71,10 @@ private:
     // taking into account that `a == b` at point `p`.
     sym_range refine_def_range_internal(var_id, sym_range const &, predicate_t const &);
 
-    void report_overflow(llvm::Instruction const &, bool sure = true);
-    void report_potential_overflow(llvm::Instruction const &);
+    void report_overflow(llvm::Instruction const &, sym_range const & idx_range,
+                         sym_range const & size_range, bool sure = true);
+    void report_potential_overflow(llvm::Instruction const &, sym_range const & idx_range,
+                                   sym_range const & size_range);
 
 private:
     context_t ctx_;

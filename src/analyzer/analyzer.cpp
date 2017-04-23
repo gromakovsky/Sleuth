@@ -284,13 +284,13 @@ sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
  * ------------------------------------------------
  */
 
-tribool analyzer_t::is_access_vulnerable(llvm::Value const & v)
+vulnerability_info_t analyzer_t::is_access_vulnerable(llvm::Value const & v)
 {
     auto cached = ctx_.vulnerability_info.find(&v);
     if (cached != ctx_.vulnerability_info.end())
         return cached->second;
 
-    tribool res = false;
+    vulnerability_info_t res = { false, sym_range::empty, sym_range::empty };
     if (auto gep = dynamic_cast<llvm::GetElementPtrInst const *>(&v))
         res = is_access_vulnerable_gep(*gep);
 
@@ -298,7 +298,7 @@ tribool analyzer_t::is_access_vulnerable(llvm::Value const & v)
     return res;
 }
 
-tribool analyzer_t::is_access_vulnerable_gep(llvm::GetElementPtrInst const & gep)
+vulnerability_info_t analyzer_t::is_access_vulnerable_gep(llvm::GetElementPtrInst const & gep)
 {
     auto source_type = gep.getSourceElementType();
     if (!source_type)
@@ -309,7 +309,7 @@ tribool analyzer_t::is_access_vulnerable_gep(llvm::GetElementPtrInst const & gep
     if (!pointer_operand)
     {
         warn_out_ << "GEP's pointer operand is null\n";
-        return false;
+        return { false, sym_range::empty, sym_range::empty };
     }
 
     sym_range buf_size = compute_buffer_size_range(*pointer_operand);
@@ -318,7 +318,7 @@ tribool analyzer_t::is_access_vulnerable_gep(llvm::GetElementPtrInst const & gep
     sym_range idx_range = compute_use_range(*gep.idx_begin(), &gep);
     debug_out_ << "GEP's base index is in range " << idx_range << "\n";
 
-    return check_overflow(buf_size, idx_range);
+    return { check_overflow(buf_size, idx_range), idx_range, buf_size };
 }
 
 /* ------------------------------------------------
@@ -326,7 +326,9 @@ tribool analyzer_t::is_access_vulnerable_gep(llvm::GetElementPtrInst const & gep
  * ------------------------------------------------
  */
 
-void analyzer_t::report_overflow(llvm::Instruction const & instr, bool sure)
+void analyzer_t::report_overflow(llvm::Instruction const & instr,
+                                 sym_range const & idx_range, sym_range const & size_range,
+                                 bool sure)
 {
     instr.getDebugLoc().print(res_out_);
     llvm::Function const * f = instr.getFunction();
@@ -335,17 +337,23 @@ void analyzer_t::report_overflow(llvm::Instruction const & instr, bool sure)
              << (sure ? "is possible" : "may be possible (but not surely)")
              << " in function "
              << func_name
-             << ", instruction "
-             << instr.getOpcodeName()
+             << ", instruction { "
+             << instr
+             << " }, index range: "
+             << idx_range
+             << ", size range: "
+             << size_range
              << "\n";
 }
 
-void analyzer_t::report_potential_overflow(llvm::Instruction const & instr)
+void analyzer_t::report_potential_overflow(llvm::Instruction const & instr,
+                                           sym_range const & idx_range,
+                                           sym_range const & size_range)
 {
     if (!report_indeterminate_)
         return;
 
-    report_overflow(instr, false);
+    report_overflow(instr, idx_range, size_range, false);
 }
 
 /* ------------------------------------------------
@@ -400,11 +408,11 @@ void analyzer_t::process_store(llvm::StoreInst const & store)
 // Process instruction 'instr' which accesses memory pointed to by value 'ptr_val'.
 void analyzer_t::process_memory_access(llvm::Instruction const & instr, llvm::Value const & ptr_val)
 {
-    tribool overflow = is_access_vulnerable(ptr_val);
-    if (overflow)
-        report_overflow(instr);
-    else if (boost::logic::indeterminate(overflow))
-        report_potential_overflow(instr);
+    vulnerability_info_t vuln_info = is_access_vulnerable(ptr_val);
+    if (vuln_info.decision)
+        report_overflow(instr, vuln_info.idx_range, vuln_info.size_range);
+    else if (boost::logic::indeterminate(vuln_info.decision))
+        report_potential_overflow(instr, vuln_info.idx_range, vuln_info.size_range);
 }
 
 /* ------------------------------------------------
