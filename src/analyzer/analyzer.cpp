@@ -330,6 +330,11 @@ void analyzer_t::report_overflow(llvm::Instruction const & instr,
                                  sym_range const & idx_range, sym_range const & size_range,
                                  bool sure)
 {
+    if (sure)
+        ++total_overflows_;
+    else
+        ++total_indeterminate_;
+
     instr.getDebugLoc().print(res_out_);
     llvm::Function const * f = instr.getFunction();
     auto func_name = f ? f->getName() : "<unknown>";
@@ -371,8 +376,6 @@ void analyzer_t::analyze_function(llvm::Function const & f)
 
 void analyzer_t::analyze_basic_block(llvm::BasicBlock const & bb)
 {
-//    debug_out_ << "Analyzing basic block " << bb.getName() << "\n";
-
     for (auto const & i : bb)
         process_instruction(i);
 }
@@ -413,6 +416,8 @@ void analyzer_t::process_memory_access(llvm::Instruction const & instr, llvm::Va
         report_overflow(instr, vuln_info.idx_range, vuln_info.size_range);
     else if (boost::logic::indeterminate(vuln_info.decision))
         report_potential_overflow(instr, vuln_info.idx_range, vuln_info.size_range);
+    else
+        ++total_correct_;
 }
 
 /* ------------------------------------------------
@@ -428,6 +433,9 @@ analyzer_t::analyzer_t(bool report_indeterminate,
     , res_out_(res_out)
     , warn_out_(warn_out)
     , debug_out_(debug_out)
+    , total_overflows_(0)
+    , total_indeterminate_(0)
+    , total_correct_(0)
 {
 }
 
@@ -444,6 +452,10 @@ void analyzer_t::analyze_file(fs::path const & p)
     }
 
     analyze_module(*m);
+    res_out_ << "Total number of possible overflows: " << total_overflows_
+             << ", total number of indeterminate cases: " << total_indeterminate_
+             << ", total number of correct memory usages: " << total_correct_
+             << "\n";
 }
 
 void analyzer_t::analyze_module(llvm::Module const & module)

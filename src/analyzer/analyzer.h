@@ -82,6 +82,9 @@ private:
     llvm::raw_ostream & res_out_;
     llvm::raw_ostream & warn_out_;
     llvm::raw_ostream & debug_out_;
+    unsigned total_overflows_;
+    unsigned total_indeterminate_;
+    unsigned total_correct_;
 };
 
 scalar_t extract_const(llvm::ConstantInt const &);
