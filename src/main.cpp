@@ -13,9 +13,9 @@ int main(int argc, char *argv[])
     bool verbose, print_indeterminate;
     po::options_description visible_options("Options");
     visible_options.add_options()
-       ("help",                                                            "display this help")
-       ("verbose,v",                 po::value(&verbose)->zero_tokens(),   "be verbose")
-       ("indeterminate,n",           po::value(&verbose)->zero_tokens(),   "report indeterminate situations")
+       ("help",                                                                      "display this help")
+       ("verbose,v",                 po::value(&verbose)->zero_tokens(),             "be verbose")
+       ("indeterminate,n",           po::value(&print_indeterminate)->zero_tokens(), "report indeterminate situations")
        ;
 
     po::options_description hidden_options("Hidden options");

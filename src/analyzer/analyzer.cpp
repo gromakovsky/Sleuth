@@ -335,6 +335,9 @@ void analyzer_t::report_overflow(llvm::Instruction const & instr,
     else
         ++total_indeterminate_;
 
+    if (!report_indeterminate_ && !sure)
+        return;
+
     instr.getDebugLoc().print(res_out_);
     llvm::Function const * f = instr.getFunction();
     auto func_name = f ? f->getName() : "<unknown>";
@@ -355,9 +358,6 @@ void analyzer_t::report_potential_overflow(llvm::Instruction const & instr,
                                            sym_range const & idx_range,
                                            sym_range const & size_range)
 {
-    if (!report_indeterminate_)
-        return;
-
     report_overflow(instr, idx_range, size_range, false);
 }
 
