@@ -266,6 +266,74 @@ boost::optional<match_res_t> match_var(var_id v, var_id to_match_with)
 sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_range,
                                                 analyzer_t::predicate_t const & pred)
 {
+    if (pred.type == PT_NE)
+    {
+        // suppose we have a predicate that x != y
+        // suppose that x = \phi(a, f(x))
+        // suppose that f(a) = a + t where `t` has a constant sign
+        // suppose that there exists such `c` that `y = a + c * t`
+        // in this case we know that `x < y` (or `>` depending on sign of `t`)
+        if (auto phi_v = dynamic_cast<llvm::PHINode const *>(v))
+        {
+            var_id y = nullptr;
+            if (pred.lhs == v)
+                y = pred.rhs;
+            else if (pred.rhs == v)
+                y = pred.lhs;
+
+            if (y && phi_v->getNumIncomingValues() == 2)
+            {
+                var_id a = phi_v->getIncomingValue(0);
+                var_id inc_v1 = phi_v->getIncomingValue(1);
+
+                if (auto f = dynamic_cast<llvm::BinaryOperator const *>(inc_v1))
+                {
+                    if (f->getOpcode() == llvm::BinaryOperator::Add)
+                    {
+                        var_id t = nullptr;
+                        if (f->getOperand(0) == v)
+                            t = f->getOperand(1);
+                        else if (f->getOperand(1) == v)
+                            t = f->getOperand(0);
+
+                        if (t)
+                        {
+                            sym_range t_range = compute_use_range(t, pred.program_point);
+                            boost::tribool t_sign = boost::indeterminate;
+                            if (sym_expr(scalar_t(0)) <= t_range.lo)
+                                t_sign = true;
+                            else if (t_range.hi <= sym_expr(scalar_t(0)))
+                                t_sign = false;
+
+                            if (t_sign == false || t_sign == true)
+                            {
+                                // now we just need to check whether (y - a) `mod` t = 0
+                                sym_range a_range = compute_use_range(a, pred.program_point);
+                                sym_range y_range = compute_use_range(y, pred.program_point);
+                                sym_range d = y_range - a_range;
+                                if (d.lo == d.hi && t_range.lo == t_range.hi)
+                                {
+                                    sym_expr c = d.lo / t_range.lo;
+                                    if (c.to_scalar())
+                                    {
+                                        // in this case we know that `v < y` (or `v > y` if `t` is negative)
+                                        sym_expr one(scalar_t(1));
+                                        sym_range positive_case = {sym_expr::bot, y_range.hi - one};
+                                        sym_range negative_case = {y_range.lo + one, sym_expr::top};
+                                        sym_range to_intersect = t_sign ? positive_case : negative_case;
+
+                                        debug_out_ << "control dependency leads to intersection with " << to_intersect << "\n";
+                                        return def_range & to_intersect;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // a = lhs, b = rhs
     var_id op2 = nullptr;
     boost::optional<match_res_t> match_res;
