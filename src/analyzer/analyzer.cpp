@@ -59,6 +59,18 @@ sym_range analyzer_t::compute_def_range(var_id const & v)
     if (it != ctx_.def_ranges.end())
         return it->second;
 
+    if (auto llvm_arg = dynamic_cast<llvm::Argument const *>(v))
+    {
+        argument_t arg = {llvm_arg->getParent(), llvm_arg->getArgNo()};
+        auto iter = ctx_.arg_ranges.find(arg);
+        if (iter != ctx_.arg_ranges.end())
+        {
+            auto res = iter->second;
+            ctx_.def_ranges.emplace(v, res);
+            return res;
+        }
+    }
+
     if (auto const_v = dynamic_cast<llvm::Constant const *>(v))
     {
         auto res = compute_def_range_const(*const_v);
@@ -469,7 +481,6 @@ void analyzer_t::process_call(llvm::CallInst const & call)
         }
 
         ctx_.arg_ranges.insert({arg, range});
-        debug_out_ << range << "\n";
     }
 }
 
@@ -519,6 +530,6 @@ void analyzer_t::analyze_module(llvm::Module const & module)
                << module.getSourceFileName()
                << "\n";
 
-    for (auto const & f : module)
-        analyze_function(f);
+    for (auto it = module.rbegin(); it != module.rend(); ++it)
+        analyze_function(*it);
 }
