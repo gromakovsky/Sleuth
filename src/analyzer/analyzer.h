@@ -33,6 +33,7 @@ private:
     void process_load(llvm::LoadInst const &);
     void process_store(llvm::StoreInst const &);
     void process_memory_access(llvm::Instruction const &, llvm::Value const &);
+    void process_call(llvm::CallInst const &);
 
     sym_range compute_def_range(var_id const &);
     sym_range compute_use_range(var_id const &, program_point_t);

@@ -420,6 +420,10 @@ void analyzer_t::process_instruction(llvm::Instruction const & instr)
     {
         process_store(*store);
     }
+    else if (auto call = dynamic_cast<llvm::CallInst const *>(&instr))
+    {
+        process_call(*call);
+    }
 }
 
 void analyzer_t::process_load(llvm::LoadInst const & load)
@@ -448,6 +452,25 @@ void analyzer_t::process_memory_access(llvm::Instruction const & instr, llvm::Va
         report_potential_overflow(instr, vuln_info.idx_range, vuln_info.size_range);
     else
         ++total_correct_;
+}
+
+void analyzer_t::process_call(llvm::CallInst const & call)
+{
+    llvm::Function const * called = call.getCalledFunction();
+    for (size_t i = 0; i != call.getNumArgOperands(); ++i)
+    {
+        argument_t arg = {called, i};
+        sym_range range = compute_use_range(call.getArgOperand(i), &call);
+        auto iter = ctx_.arg_ranges.find(arg);
+        if (iter != ctx_.arg_ranges.end())
+        {
+            range |= iter->second;
+            ctx_.arg_ranges.erase(arg);
+        }
+
+        ctx_.arg_ranges.insert({arg, range});
+        debug_out_ << range << "\n";
+    }
 }
 
 /* ------------------------------------------------
