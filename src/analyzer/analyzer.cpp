@@ -269,6 +269,14 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
 // size is number of elements, not bytes
 sym_range analyzer_t::compute_buffer_size_range(llvm::Value const & v)
 {
+    if (auto llvm_arg = dynamic_cast<llvm::Argument const *>(&v))
+    {
+        argument_t arg = {llvm_arg->getParent(), llvm_arg->getArgNo()};
+        auto iter = ctx_.arg_size_ranges.find(arg);
+        if (iter != ctx_.arg_size_ranges.end())
+            return iter->second;
+    }
+
     llvm::TargetLibraryInfo const & tli = ctx_.tliwp.getTLI();
     if (auto alloca = dynamic_cast<llvm::AllocaInst const *>(&v))
         return compute_use_range(alloca->getArraySize(), alloca);
@@ -472,15 +480,30 @@ void analyzer_t::process_call(llvm::CallInst const & call)
     for (size_t i = 0; i != call.getNumArgOperands(); ++i)
     {
         argument_t arg = {called, i};
-        sym_range range = compute_use_range(call.getArgOperand(i), &call);
-        auto iter = ctx_.arg_ranges.find(arg);
-        if (iter != ctx_.arg_ranges.end())
+        // compute value range
         {
-            range |= iter->second;
-            ctx_.arg_ranges.erase(arg);
-        }
+            sym_range range = compute_use_range(call.getArgOperand(i), &call);
+            auto iter = ctx_.arg_ranges.find(arg);
+            if (iter != ctx_.arg_ranges.end())
+            {
+                range |= iter->second;
+                ctx_.arg_ranges.erase(arg);
+            }
 
-        ctx_.arg_ranges.insert({arg, range});
+            ctx_.arg_ranges.insert({arg, range});
+        }
+        // same for buffer size range
+        {
+            sym_range range = compute_buffer_size_range(*call.getArgOperand(i));
+            auto iter = ctx_.arg_size_ranges.find(arg);
+            if (iter != ctx_.arg_size_ranges.end())
+            {
+                range |= iter->second;
+                ctx_.arg_size_ranges.erase(arg);
+            }
+
+            ctx_.arg_size_ranges.insert({arg, range});
+        }
     }
 }
 

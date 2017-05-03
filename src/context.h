@@ -56,4 +56,5 @@ struct context_t
     llvm::TargetLibraryInfoWrapperPass tliwp;
     llvm::DominatorTreeWrapperPass dtwp;
     std::unordered_map<argument_t, sym_range> arg_ranges;
+    std::unordered_map<argument_t, sym_range> arg_size_ranges;
 };
