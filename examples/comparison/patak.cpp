@@ -169,10 +169,19 @@ void inter(int i)
     free(arr);
 }
 
+// interprocedural
+void inter2(int i)
+{
+    int * arr = (int*) malloc(7 * sizeof(int));
+    arr[i] = i;
+    free(arr);
+}
+
 int main()
 {
     for_with_guard();
     inter(5);
     inter(10);
+    inter2(5);
     return 0;
 }
