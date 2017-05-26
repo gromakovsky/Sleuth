@@ -24,3 +24,7 @@ analyzer_t::impl_t::impl_t(bool report_indeterminate,
 {
 
 }
+
+analyzer_t::impl_t::~impl_t()
+{
+}

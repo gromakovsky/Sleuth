@@ -39,6 +39,7 @@ void analyzer_t::analyze_module(llvm::Module const & module)
                << module.getSourceFileName()
                << "\n";
 
+    pimpl().gsa_builder.build(module);
     for (auto it = module.rbegin(); it != module.rend(); ++it)
         analyze_function(*it);
 }
