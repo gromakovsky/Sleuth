@@ -23,6 +23,8 @@ struct analyzer_t
 
     void analyze_file(boost::filesystem::path const &);
 
+    ~analyzer_t();
+
 private:
     void analyze_module(llvm::Module const &);
     void analyze_function(llvm::Function const &);
@@ -44,6 +46,11 @@ private:
     sym_range compute_buffer_size_range(llvm::Value const &);
     vulnerability_info_t is_access_vulnerable(llvm::Value const &);
     vulnerability_info_t is_access_vulnerable_gep(llvm::GetElementPtrInst const &);
+
+    /* ------------------------------------------------
+     * Refinement
+     * ------------------------------------------------
+     */
 
     sym_range refine_def_range(var_id, sym_range, program_point_t);
     enum predicate_type {
@@ -72,18 +79,19 @@ private:
     // taking into account that `a == b` at point `p`.
     sym_range refine_def_range_internal(var_id, sym_range const &, predicate_t const &);
 
+    /* ------------------------------------------------
+     * Reporting
+     * ------------------------------------------------
+     */
+
     void report_overflow(llvm::Instruction const &, sym_range const & idx_range,
                          sym_range const & size_range, bool sure = true);
     void report_potential_overflow(llvm::Instruction const &, sym_range const & idx_range,
                                    sym_range const & size_range);
-
 private:
-    context_t ctx_;
-    bool report_indeterminate_;
-    llvm::raw_ostream & res_out_;
-    llvm::raw_ostream & warn_out_;
-    llvm::raw_ostream & debug_out_;
-    unsigned total_overflows_;
-    unsigned total_indeterminate_;
-    unsigned total_correct_;
+    struct impl_t;
+    std::unique_ptr<impl_t> pimpl_;
+    impl_t & pimpl();
+    impl_t const & pimpl() const;
 };
+

@@ -1,4 +1,5 @@
 #include "analyzer.h"
+#include "impl.h"
 
 #include <iterator>
 
@@ -80,9 +81,9 @@ analyzer_t::predicates_t analyzer_t::collect_predicates(llvm::BasicBlock const *
     //
     // Probably it can be optimized.
 
-    ctx_.dtwp.runOnFunction(*const_cast<llvm::Function *>(func));
+    pimpl().ctx.dtwp.runOnFunction(*const_cast<llvm::Function *>(func));
 
-    llvm::DominatorTree const & dom_tree = ctx_.dtwp.getDomTree();
+    llvm::DominatorTree const & dom_tree = pimpl().ctx.dtwp.getDomTree();
     std::vector<llvm::BasicBlock const *> dominators;
     for (auto const & another_bb : *func)
     {
@@ -103,7 +104,7 @@ analyzer_t::predicates_t analyzer_t::collect_predicates(llvm::BasicBlock const *
             llvm::BasicBlock const * false_bb = br->getSuccessor(1);
             bool reachable_from_true = is_potentially_reachable_custom(true_bb, bb, dominator, dom_tree);
             bool reachable_from_false = is_potentially_reachable_custom(false_bb, bb, dominator, dom_tree);
-//            debug_out_ << "dominator: " << *dominator->getTerminator()
+//            pimpl().debug_out << "dominator: " << *dominator->getTerminator()
 //                       << ", reachable from true: " << reachable_from_true
 //                       << ", reachable from false: " << reachable_from_false
 //                       << "\n";
@@ -322,7 +323,7 @@ sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_
                                         sym_range negative_case = {y_range.lo + one, sym_expr::top};
                                         sym_range to_intersect = t_sign ? positive_case : negative_case;
 
-                                        debug_out_ << "control dependency leads to intersection with " << to_intersect << "\n";
+                                        pimpl().debug_out << "control dependency leads to intersection with " << to_intersect << "\n";
                                         return def_range & to_intersect;
                                     }
                                 }
@@ -411,6 +412,6 @@ sym_range analyzer_t::refine_def_range_internal(var_id v, sym_range const & def_
     }
     }
 
-    debug_out_ << "control dependency leads to intersection with " << to_intersect << "\n";
+    pimpl().debug_out << "control dependency leads to intersection with " << to_intersect << "\n";
     return def_range & to_intersect;
 }
