@@ -17,7 +17,7 @@ struct vulnerability_info_t
 {
     // true = vulnerable
     // false = not vulnerable
-    // interminated = may be vulnerable, but we don't know for sure
+    // indeterminate = may be vulnerable, but we don't know for sure
     boost::tribool decision;
     sym_range idx_range;
     sym_range size_range;
