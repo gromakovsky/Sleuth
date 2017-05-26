@@ -138,7 +138,6 @@ void for_with_guard()
     free(arr);
 }
 
-// Example presented in Li, Cifuentes, Keynes paper
 char * tosunds_str(char * str)
 {
     int i, j, n;
