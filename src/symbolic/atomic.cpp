@@ -26,6 +26,11 @@ bool atomic_const::operator==(sym_atomic const & rhs) const
     return false;
 }
 
+scalar_t atomic_const::value() const
+{
+    return val_;
+}
+
 atomic_var::atomic_var(var_id var)
     : var_(var)
 {
@@ -50,6 +55,11 @@ bool atomic_var::operator==(sym_atomic const & rhs) const
     return false;
 }
 
+var_id atomic_var::var() const
+{
+    return var_;
+}
+
 atomic_linear::atomic_linear(sym_atomic_ptr const & atom, scalar_t k)
     : atom_(atom)
     , coeff_(k)
@@ -68,6 +78,16 @@ bool atomic_linear::operator==(sym_atomic const & rhs) const
                 && *atom_ == *lin->atom_;
 
     return false;
+}
+
+sym_atomic_ptr const & atomic_linear::atom() const
+{
+    return atom_;
+}
+
+scalar_t atomic_linear::coeff() const
+{
+    return coeff_;
 }
 
 atomic_bin_op::atomic_bin_op(sym_atomic_ptr const & lhs, sym_atomic_ptr const & rhs,
@@ -100,5 +120,15 @@ bool atomic_bin_op::operator==(sym_atomic const & rhs) const
 
     return false;
 
+}
+
+sym_atomic_ptr const & atomic_bin_op::lhs() const
+{
+    return lhs_;
+}
+
+sym_atomic_ptr const & atomic_bin_op::rhs() const
+{
+    return rhs_;
 }
 

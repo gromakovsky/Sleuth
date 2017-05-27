@@ -253,12 +253,24 @@ sym_atomic_ptr sym_expr::to_atom_no_delta() const
 
 sym_atomic_ptr sym_expr::to_atom() const
 {
+    if (coeff_ == 0 && delta_ == 0)
+        return std::make_shared<atomic_const>(scalar_t(0));
+
     sym_atomic_ptr no_delta_atom = to_atom_no_delta();
     if (delta_ == 0)
         return no_delta_atom;
 
     auto delta_atom = std::make_shared<atomic_const>(delta_);
-    return std::make_shared<atomic_bin_op>(no_delta_atom, delta_atom, atomic_bin_op::Plus);
+    if (coeff_ == 0)
+    {
+        return delta_atom;
+    }
+    else
+    {
+        return std::make_shared<atomic_bin_op>(no_delta_atom,
+                                               delta_atom,
+                                               atomic_bin_op::Plus);
+    }
 }
 
 sym_expr::sym_expr(bool is_special)

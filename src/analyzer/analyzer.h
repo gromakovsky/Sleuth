@@ -39,6 +39,15 @@ private:
     void process_store(llvm::StoreInst const &);
     void process_memory_access(llvm::Instruction const &, llvm::Value const &);
     void process_call(llvm::CallInst const &);
+    // The result of this function is whether the first argument is less than
+    // or equal to the second one.
+    // These expressions may contain 'Argument's which are resolved based on
+    // the given 'CallInst'.
+    boost::tribool is_le_arg(sym_expr const &, sym_expr const &, llvm::CallInst const &);
+    // Resolve use range of given symbolic expression in given 'CallInst'.
+    // This expression may contain 'Argument's which are resolved based on
+    // the given 'CallInst'.
+    sym_range resolve_expr_arg(sym_expr const &, llvm::CallInst const &);
 
     sym_range compute_def_range(var_id const &);
     sym_range compute_use_range(var_id const &, program_point_t);
@@ -47,8 +56,10 @@ private:
     sym_range compute_def_range_const(llvm::Constant const &);
     sym_range compute_def_range_internal(llvm::Value const &);
     sym_range compute_buffer_size_range(llvm::Value const &);
-    vulnerability_info_t is_access_vulnerable(llvm::Value const &);
-    vulnerability_info_t is_access_vulnerable_gep(llvm::GetElementPtrInst const &);
+    vulnerability_info_t is_access_vulnerable(llvm::Value const &,
+                                              llvm::Instruction const & instr);
+    vulnerability_info_t is_access_vulnerable_gep(llvm::GetElementPtrInst const &,
+                                                  llvm::Instruction const & instr);
 
     /* ------------------------------------------------
      * Refinement
@@ -92,10 +103,10 @@ private:
      * ------------------------------------------------
      */
 
-    void report_overflow(llvm::Instruction const &, sym_range const & idx_range,
-                         sym_range const & size_range, bool sure = true);
-    void report_potential_overflow(llvm::Instruction const &, sym_range const & idx_range,
-                                   sym_range const & size_range);
+    void report_overflow(llvm::Instruction const &, boost::optional<sym_range const &> idx_range,
+                         boost::optional<sym_range const &> size_range, bool sure = true);
+    void report_potential_overflow(llvm::Instruction const &, boost::optional<sym_range const &> idx_range,
+                                   boost::optional<sym_range const &> size_range);
 private:
     struct impl_t;
     std::unique_ptr<impl_t> pimpl_;

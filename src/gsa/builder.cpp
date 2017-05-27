@@ -27,8 +27,8 @@ gsa_builder_t::~gsa_builder_t()
 
 void gsa_builder_t::build(llvm::Module const & module)
 {
-    for (auto it = module.rbegin(); it != module.rend(); ++it)
-        process_function(*it);
+    for (auto const & f : module)
+        process_function(f);
 }
 
 void gsa_builder_t::process_function(llvm::Function const & func)

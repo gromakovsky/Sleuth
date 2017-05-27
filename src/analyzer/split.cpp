@@ -40,8 +40,8 @@ void analyzer_t::analyze_module(llvm::Module const & module)
                << "\n";
 
     pimpl().gsa_builder.build(module);
-    for (auto it = module.rbegin(); it != module.rend(); ++it)
-        analyze_function(*it);
+    for (auto const & f : module)
+        analyze_function(f);
 }
 
 void analyzer_t::analyze_function(llvm::Function const & f)

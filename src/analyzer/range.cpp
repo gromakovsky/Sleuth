@@ -29,14 +29,9 @@ sym_range analyzer_t::compute_def_range(var_id const & v)
 
     if (auto llvm_arg = dynamic_cast<llvm::Argument const *>(v))
     {
-        argument_t arg = {llvm_arg->getParent(), llvm_arg->getArgNo()};
-        auto iter = pimpl().ctx.arg_ranges.find(arg);
-        if (iter != pimpl().ctx.arg_ranges.end())
-        {
-            auto res = iter->second;
-            pimpl().ctx.def_ranges.emplace(v, res);
-            return res;
-        }
+        auto res = var_sym_range(llvm_arg);
+        pimpl().ctx.def_ranges.emplace(v, res);
+        return res;
     }
 
     if (auto const_v = dynamic_cast<llvm::Constant const *>(v))

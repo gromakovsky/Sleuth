@@ -32,10 +32,10 @@ struct sym_expr
 
     boost::optional<scalar_t> to_scalar() const;
 
-private:
-    sym_atomic_ptr to_atom_no_delta() const;
     sym_atomic_ptr to_atom() const;
 
+private:
+    sym_atomic_ptr to_atom_no_delta() const;
 private:
     // actual value is `coeff_ * atom_ + b` unless it's a special expression
     scalar_t coeff_;

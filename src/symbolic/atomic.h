@@ -23,6 +23,8 @@ struct atomic_const : sym_atomic
     virtual void print(llvm::raw_ostream &) const override;
     virtual bool operator==(sym_atomic const &) const override;
 
+    scalar_t value() const;
+
 private:
     scalar_t val_;
 };
@@ -34,6 +36,8 @@ struct atomic_var : sym_atomic
     virtual void print(llvm::raw_ostream &) const override;
     virtual bool operator==(sym_atomic const &) const override;
 
+    var_id var() const;
+
 private:
     var_id var_;
 };
@@ -44,6 +48,9 @@ struct atomic_linear : sym_atomic
 
     virtual void print(llvm::raw_ostream &) const override;
     virtual bool operator==(sym_atomic const &) const override;
+
+    sym_atomic_ptr const & atom() const;
+    scalar_t coeff() const;
 
 private:
     sym_atomic_ptr atom_;
@@ -63,6 +70,9 @@ struct atomic_bin_op : sym_atomic
 
     virtual void print(llvm::raw_ostream &) const override;
     virtual bool operator==(sym_atomic const &) const override;
+
+    sym_atomic_ptr const & lhs() const;
+    sym_atomic_ptr const & rhs() const;
 
 private:
     sym_atomic_ptr lhs_, rhs_;
