@@ -125,8 +125,16 @@ sym_range analyzer_t::compute_def_range_internal(llvm::Value const & v)
     else if (auto phi = dynamic_cast<llvm::PHINode const *>(&v))
     {
         sym_range r(sym_range::empty);
+        size_t counter = 0;
         for (var_id inc_v : phi->incoming_values())
-            r |= compute_use_range(inc_v, phi);
+        {
+            sym_range current_range = compute_use_range(inc_v, phi);
+            if (auto gating = pimpl().gsa_builder.get_gating_condition(*phi, counter))
+                current_range = refine_def_range_gating(inc_v, current_range, *gating);
+
+            r |= current_range;
+            ++counter;
+        }
 
         if (phi->getNumIncomingValues() == 2)
         {

@@ -1,5 +1,9 @@
 #pragma once
 
+#include "context.h"
+#include "symbolic.h"
+#include "gsa/cond.h"
+
 #include <boost/filesystem.hpp>
 #include <boost/logic/tribool.hpp>
 
@@ -8,9 +12,6 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/Support/raw_ostream.h>
-
-#include "context.h"
-#include "symbolic.h"
 
 // Program point is an alias for instruction because it corresponds to common
 // sense, but in fact we use only basic block from this instruction.
@@ -54,7 +55,11 @@ private:
      * ------------------------------------------------
      */
 
+    // Refine define range according to predicates on ways to the given program point
     sym_range refine_def_range(var_id, sym_range, program_point_t);
+    // Refine define range according to the gating condition
+    sym_range refine_def_range_gating(var_id, sym_range, gating_cond_t const &);
+
     enum predicate_type {
         PT_EQ,
         PT_NE,
@@ -73,6 +78,7 @@ private:
     using predicates_t = std::vector<analyzer_t::predicate_t>;
 
     predicates_t collect_predicates(llvm::BasicBlock const *);
+    predicates_t collect_gating_predicates(var_id v, gating_cond_t const &);
 
     // The first argument is a variable for which we want to refine range.
     // The second argument is symbolic range as it's known before call.

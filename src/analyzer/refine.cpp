@@ -186,6 +186,117 @@ analyzer_t::predicates_t analyzer_t::collect_predicates(llvm::BasicBlock const *
     return predicates;
 }
 
+analyzer_t::predicates_t analyzer_t::collect_gating_predicates(var_id v, gating_cond_t const & cond)
+{
+    predicates_t predicates;
+    auto to_predicates = [&](llvm::Value const * gating_cond)
+    {
+        if (auto cmp_inst = dynamic_cast<llvm::ICmpInst const *>(gating_cond))
+        {
+            auto add_pred = [&predicates, cmp_inst](bool swap_args, predicate_type pr_type)
+            {
+                predicate_t pred = {pr_type,
+                                    swap_args ? cmp_inst->getOperand(1)
+                                              : cmp_inst->getOperand(0),
+                                    swap_args ? cmp_inst->getOperand(0)
+                                              : cmp_inst->getOperand(1),
+                                    cmp_inst};
+                predicates.push_back(pred);
+            };
+
+            switch (cmp_inst->getPredicate())
+            {
+            case llvm::ICmpInst::ICMP_EQ:
+                {
+                    add_pred(false, PT_EQ);
+                    break;
+                }
+            case llvm::ICmpInst::ICMP_NE:
+                {
+                    add_pred(false, PT_NE);
+                    break;
+                }
+            case llvm::ICmpInst::ICMP_UGT:
+            case llvm::ICmpInst::ICMP_SGT:
+                {
+                    add_pred(true, PT_LT);
+                    break;
+                }
+            case llvm::ICmpInst::ICMP_UGE:
+            case llvm::ICmpInst::ICMP_SGE:
+                {
+                    add_pred(true, PT_LE);
+                    break;
+                }
+            case llvm::ICmpInst::ICMP_ULT:
+            case llvm::ICmpInst::ICMP_SLT:
+                {
+                    add_pred(false, PT_LE);
+                    break;
+                }
+            case llvm::ICmpInst::ICMP_ULE:
+            case llvm::ICmpInst::ICMP_SLE:
+                {
+                    add_pred(false, PT_LT);
+                    break;
+                }
+            default:
+                {
+                }
+            }
+        }
+    };
+
+    auto negate = [&](predicate_t & pred)
+    {
+        switch (pred.type)
+        {
+        case PT_EQ:
+        {
+            pred.type = PT_NE;
+            break;
+        }
+        case PT_NE:
+        {
+            pred.type = PT_EQ;
+            break;
+        }
+        case PT_LT:
+        {
+            pred.type = PT_LE;
+            std::swap(pred.lhs, pred.rhs);
+            break;
+        }
+        case PT_LE:
+        {
+            pred.type = PT_LT;
+            std::swap(pred.lhs, pred.rhs);
+            break;
+        }
+        }
+    };
+
+    if (auto simple_cond = dynamic_cast<simple_gating_cond_t const *>(&cond))
+    {
+        to_predicates(simple_cond->predicate);
+    }
+    else if (auto neg_cond = dynamic_cast<negated_gating_cond_t const *>(&cond))
+    {
+        to_predicates(neg_cond->predicate);
+        for (auto & pred : predicates)
+            negate(pred);
+    }
+    else if (auto conj_cond = dynamic_cast<conjuncted_gating_cond_t const *>(&cond))
+    {
+        predicates_t preds1 = collect_gating_predicates(v, *(conj_cond->lhs));
+        predicates_t preds2 = collect_gating_predicates(v, *(conj_cond->rhs));
+        std::copy(preds2.begin(), preds2.end(), std::back_inserter(preds1));
+        return preds1;
+    }
+
+    return predicates;
+}
+
 sym_range analyzer_t::refine_def_range(var_id v, sym_range def_range, program_point_t p)
 {
     if (!p)
@@ -193,6 +304,15 @@ sym_range analyzer_t::refine_def_range(var_id v, sym_range def_range, program_po
 
     llvm::BasicBlock const * bb = p->getParent();
     predicates_t predicates = collect_predicates(bb);
+    for (predicate_t const & predicate : predicates)
+        def_range = refine_def_range_internal(v, def_range, predicate);
+
+    return def_range;
+}
+
+sym_range analyzer_t::refine_def_range_gating(var_id v, sym_range def_range, gating_cond_t const & cond)
+{
+    predicates_t predicates = collect_gating_predicates(v, cond);
     for (predicate_t const & predicate : predicates)
         def_range = refine_def_range_internal(v, def_range, predicate);
 
