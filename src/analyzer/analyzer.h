@@ -12,6 +12,8 @@
 #include "context.h"
 #include "symbolic.h"
 
+// Program point is an alias for instruction because it corresponds to common
+// sense, but in fact we use only basic block from this instruction.
 using program_point_t = llvm::Instruction const *;
 
 struct analyzer_t
