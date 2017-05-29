@@ -1,3 +1,9 @@
+#include "expr.h"
+
+#include <boost/optional.hpp>
+
+#include <llvm/Support/raw_ostream.h>
+
 struct sym_range
 {
     sym_expr lo;
