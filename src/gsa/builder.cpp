@@ -40,6 +40,42 @@ void gsa_builder_t::process_function(llvm::Function const & func)
         process_basic_block_recursive(bb, dom_tree);
 }
 
+namespace
+{
+
+bool is_linkable(llvm::BasicBlock const * v, llvm::BasicBlock const * w,
+                 llvm::DominatorTree const & DT)
+{
+    std::vector<llvm::Value const *> storage;
+    storage.push_back(v);
+
+    if (!DT.isReachableFromEntry(w))
+      return false;
+
+    while (v != w && storage.size())
+    {
+        llvm::Value const * val = storage.back();
+        storage.pop_back();
+
+        if (llvm::BasicBlock const * bb = dynamic_cast<llvm::BasicBlock const *>(val))
+        {
+            if (bb == w)
+              return true;
+            if (DT.dominates(bb, w))
+              return false;
+
+            if (bb != v)
+            {
+                std::copy(llvm::succ_begin(bb), llvm::succ_end(bb), std::back_inserter(storage));
+            }
+        }
+    }
+
+    return true;
+}
+
+}
+
 // This function traverses basic blocks from function's CFG in depth-first order.
 // Here we compute gating paths and build gating functions.
 void gsa_builder_t::process_basic_block_recursive(llvm::BasicBlock const & bb, llvm::DominatorTree const & dt)
@@ -150,12 +186,16 @@ void gsa_builder_t::process_basic_block_recursive(llvm::BasicBlock const & bb, l
     }
 }
 
+// subroot function as defined in the paper
+// it's sibling of 'v' dominating 'w'
 llvm::Instruction const * gsa_builder_t::subroot(llvm::Instruction const * instr)
 {
     llvm::BasicBlock const * parent = instr->getParent();
     llvm::TerminatorInst const * par_term = parent->getTerminator();
+
     if (dynamic_cast<llvm::ReturnInst const *>(par_term))
         return nullptr;
+
     else if (auto br_instr = dynamic_cast<llvm::BranchInst const *>(par_term))
     {
         unsigned n = br_instr->getNumSuccessors();

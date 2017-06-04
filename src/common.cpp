@@ -27,6 +27,7 @@ boost::optional<scalar_t> extract_const_maybe(llvm::Value const * v)
 
 monotony_t does_monotonically_depend(var_id dependent, var_id x)
 {
+    // currently we only consuder binary operators
     if (auto bin_op = dynamic_cast<llvm::BinaryOperator const *>(dependent))
     {
         var_id op0 = bin_op->getOperand(0), op1 = bin_op->getOperand(1);
@@ -36,6 +37,7 @@ monotony_t does_monotonically_depend(var_id dependent, var_id x)
         bool x_is0 = op0 == x;
         if (auto scalar = extract_const_maybe(x_is0 ? op1 : op0))
         {
+            // actually we consider only addition and subtraction
             switch (bin_op->getOpcode())
             {
             case llvm::BinaryOperator::Add:
