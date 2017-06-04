@@ -1,4 +1,5 @@
 #include "analyzer/impl.h"
+#include "analyzer/sort.h"
 
 #include <iostream>
 
@@ -40,8 +41,20 @@ void analyzer_t::analyze_module(llvm::Module const & module)
                << "\n";
 
     pimpl().gsa_builder.build(module);
+    std::vector<const llvm::Function *> functions;
     for (auto const & f : module)
-        analyze_function(f);
+    {
+        functions.push_back(&f);
+    }
+
+    pimpl().debug_out << "Total number of functions: " << functions.size() << "\n";
+
+    auto sorted = sort_functions(functions);
+
+    for (auto f : sorted)
+    {
+        analyze_function(*f);
+    }
 }
 
 void analyzer_t::analyze_function(llvm::Function const & f)
